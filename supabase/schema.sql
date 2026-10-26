@@ -8,8 +8,11 @@ create table if not exists properties (
   id          uuid primary key default gen_random_uuid(),
   name        text not null,
   address     text,
+  analysis    jsonb,                  -- the six-section written REA analysis
   created_at  timestamptz not null default now()
 );
+-- if the table already existed from an earlier install, add the column:
+alter table properties add column if not exists analysis jsonb;
 
 -- 2. SITE MAPS: the uploaded site-plan image for a property
 create table if not exists site_maps (

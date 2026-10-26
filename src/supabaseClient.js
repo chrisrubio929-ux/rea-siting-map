@@ -12,34 +12,34 @@ export const supabase = supabaseReady ? createClient(url, anonKey) : null;
 
 // ---- Data helpers ----
 
-export async function saveProperty({ name, address, imageBlob, imageType, zones }) {
+export async function saveProperty({ name, address, imageBlob, imageType, zones, analysis }) {
   if (!supabaseReady) throw new Error("Supabase is not configured.");
 
-  // 1. upload the site-plan image to Storage
-  const ext = (imageType && imageType.split("/")[1]) || "png";
-  const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-  const up = await supabase.storage.from("site-plans").upload(path, imageBlob, { contentType: imageType });
-  if (up.error) throw up.error;
-  const { data: pub } = supabase.storage.from("site-plans").getPublicUrl(path);
-  const imageUrl = pub.publicUrl;
-
-  // 2. property row
-  const prop = await supabase.from("properties").insert({ name, address }).select().single();
+  // 1. property row (with the written analysis)
+  const prop = await supabase.from("properties").insert({ name, address, analysis: analysis || null }).select().single();
   if (prop.error) throw prop.error;
 
-  // 3. map row
-  const map = await supabase.from("site_maps").insert({ property_id: prop.data.id, image_url: imageUrl }).select().single();
-  if (map.error) throw map.error;
+  // if there's a site plan, upload it and create a map + zones
+  if (imageBlob) {
+    const ext = (imageType && imageType.split("/")[1]) || "png";
+    const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const up = await supabase.storage.from("site-plans").upload(path, imageBlob, { contentType: imageType });
+    if (up.error) throw up.error;
+    const { data: pub } = supabase.storage.from("site-plans").getPublicUrl(path);
+    const imageUrl = pub.publicUrl;
 
-  // 4. zone rows
-  if (zones.length) {
-    const rows = zones.map((z) => ({
-      map_id: map.data.id, label: z.label, viability: z.viability,
-      controlling_party: z.controllingParty, approval: z.approval,
-      x: z.x, y: z.y, w: z.w, h: z.h,
-    }));
-    const zr = await supabase.from("zones").insert(rows);
-    if (zr.error) throw zr.error;
+    const map = await supabase.from("site_maps").insert({ property_id: prop.data.id, image_url: imageUrl }).select().single();
+    if (map.error) throw map.error;
+
+    if (zones && zones.length) {
+      const rows = zones.map((z) => ({
+        map_id: map.data.id, label: z.label, viability: z.viability,
+        controlling_party: z.controllingParty, approval: z.approval,
+        x: z.x, y: z.y, w: z.w, h: z.h,
+      }));
+      const zr = await supabase.from("zones").insert(rows);
+      if (zr.error) throw zr.error;
+    }
   }
   return prop.data;
 }
@@ -48,7 +48,7 @@ export async function listProperties() {
   if (!supabaseReady) return [];
   const { data, error } = await supabase
     .from("properties")
-    .select("id, name, address, created_at, site_maps(id, image_url)")
+    .select("id, name, address, analysis, created_at, site_maps(id, image_url)")
     .order("created_at", { ascending: false });
   if (error) throw error;
   return data || [];

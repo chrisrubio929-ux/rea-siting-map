@@ -1,9 +1,19 @@
-# CBRE REA EV Siting Map (Tier 3)
+# CBRE REA EV Siting Workbench
 
-Upload a shopping-center site plan, let AI draft the EV charging zones onto it,
-drag/resize/relabel them to match reality, and **save each property to a shared
-library** your team can reopen. Built with React + Vite, deployed on Netlify,
-data in Supabase, AI by Claude.
+A single guided flow for EV siting at retail centers:
+1. **Analysis** — upload the REA/OEA documents (base + amendments); AI returns the
+   full written analysis (parties, control zones, approval matrix, risks, next steps).
+2. **Map** — upload the site plan (PDF or image); AI drafts charging zones onto it
+   **using the real findings from your analysis**, then drag/resize/relabel them.
+3. **Save** — store the analysis + the marked-up map together, per property, in a
+   shared library your team can reopen.
+
+Built with React + Vite, deployed on Netlify, data in Supabase, AI by Claude.
+
+### Already deployed an earlier version?
+Run **`supabase/migration-add-analysis.sql`** once in the Supabase SQL Editor —
+it adds the column that stores the written analysis. (A fresh install using
+`schema.sql` already includes it.)
 
 ---
 
