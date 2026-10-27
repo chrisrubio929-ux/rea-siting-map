@@ -55,9 +55,13 @@ async function readApiJson(resp) {
     if (resp.status === 413 || /too large|payload/i.test(raw)) {
       throw new Error("the upload was too large for one request. Try fewer or smaller PDFs at once.");
     }
-    throw new Error("the server returned an unexpected response (status " + resp.status + "). Try again, or with fewer documents.");
+    const snippet = (raw || "").replace(/\s+/g, " ").trim().slice(0, 300);
+    throw new Error(`server returned non-JSON (status ${resp.status}): ${snippet || "(empty response)"}`);
   }
-  if (data.error) throw new Error(data.error.message || data.error);
+  if (data.error) {
+    const m = data.error.message || JSON.stringify(data.error);
+    throw new Error(`[HTTP ${resp.status}] ${m}`);
+  }
   return data;
 }
 function extractJson(data) {
@@ -127,10 +131,13 @@ export default function App() {
         setProgress(""); setAnalysis(extractJson(data));
         return;
       } catch (syncErr) {
-        // If it's a timeout/too-large signal AND we have a database, try background.
-        const isTimeout = /too long|timeout|timed out|unexpected response|too large/i.test(syncErr.message);
-        if (!supabaseReady || !isTimeout) throw syncErr;
-        setProgress("Large package detected — switching to the extended analysis engine…");
+        // Only fall back to the background path on a genuine gateway timeout
+        // (status 502/504 or an explicit "took too long"). Every other error —
+        // an Anthropic error, a server crash, a bad response — is surfaced
+        // directly so we see the real reason instead of silently hanging.
+        const isRealTimeout = /took too long|timed out|status 502|status 504/i.test(syncErr.message);
+        if (!supabaseReady || !isRealTimeout) throw syncErr;
+        setProgress("This package is large — switching to the extended (no-time-limit) engine…");
       }
 
       // ---- Background fallback (no time limit) ----
@@ -454,7 +461,7 @@ export default function App() {
 
       <div style={{ textAlign: "center", padding: 20, color: C.cement, fontSize: 11 }}>
         Created by Chris Rubio · Preliminary analysis only — not legal advice. Confirm all findings against the executed REA with counsel.
-        <div style={{ marginTop: 6, opacity: 0.5 }}>build v10-syncfirst</div>
+        <div style={{ marginTop: 6, opacity: 0.5 }}>build v11-realerror</div>
       </div>
     </div>
   );
