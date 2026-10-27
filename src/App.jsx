@@ -80,6 +80,7 @@ export default function App() {
   const [propInfo, setPropInfo] = useState("");
   const [analysis, setAnalysis] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [progress, setProgress] = useState("");
 
   const [imgSrc, setImgSrc] = useState(null);
   const [imgType, setImgType] = useState(null);
@@ -113,20 +114,26 @@ export default function App() {
 
       if (supabaseReady) {
         // Background flow: no timeout, handles large document packages.
+        setProgress("Uploading documents…");
         const jobId = await createJob();
+        setProgress("Sending to the analysis engine…");
         await fetch("/api/analyze-rea-background", {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ jobId, documents, propInfo, supabaseUrl, supabaseKey: supabaseAnonKey }),
         });
-        // poll until done (up to ~5 minutes)
+        // poll until done (up to ~12 minutes — background functions can run 15)
         const started = Date.now();
-        while (Date.now() - started < 5 * 60 * 1000) {
+        while (Date.now() - started < 12 * 60 * 1000) {
           await new Promise((r) => setTimeout(r, 3000));
-          const job = await pollJob(jobId);
-          if (job.status === "done") { setAnalysis(job.result); return; }
+          const secs = Math.round((Date.now() - started) / 1000);
+          setProgress(`Reading the documents and reasoning through the agreement… ${secs}s elapsed (this is normal for a large package).`);
+          let job;
+          try { job = await pollJob(jobId); }
+          catch (pe) { setProgress(`Checking status… (${secs}s) — reconnecting`); continue; }
+          if (job.status === "done") { setProgress(""); setAnalysis(job.result); return; }
           if (job.status === "error") throw new Error(job.error || "analysis failed");
         }
-        throw new Error("the analysis is taking unusually long. Try fewer documents, or check back shortly.");
+        throw new Error("the analysis is taking unusually long (over 12 minutes). This usually means the document package is very large — try the base agreement plus only the most recent amendments.");
       } else {
         // No database configured — use the direct (timeout-limited) endpoint.
         const resp = await fetch("/api/analyze-rea", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ documents, propInfo }) });
@@ -134,7 +141,7 @@ export default function App() {
         setAnalysis(extractJson(data));
       }
     } catch (e) { setError("Couldn't analyze the documents: " + e.message); }
-    finally { setAnalyzing(false); }
+    finally { setAnalyzing(false); setProgress(""); }
   };
 
   const onPickPlan = async (file) => {
@@ -237,6 +244,7 @@ export default function App() {
         .handle { position:absolute; right:-6px; bottom:-6px; width:12px; height:12px; background:#fff; border:2px solid ${C.darkGreen}; border-radius:2px; cursor:nwse-resize; }
         @media (max-width:980px){ .layout { grid-template-columns:1fr !important; } }
         button:focus-visible, input:focus-visible, textarea:focus-visible { outline:3px solid ${C.accent}; outline-offset:2px; }
+        @keyframes pulse { 0%,100%{opacity:1;transform:scale(1);} 50%{opacity:0.35;transform:scale(0.7);} }
       `}</style>
 
       <div style={{ background: C.darkGreen, padding: "20px 24px" }}>
@@ -310,7 +318,10 @@ export default function App() {
                 {analyzing ? "Analyzing…" : analysis ? "Re-run analysis" : "Analyze documents"}
               </button>
               {analysis && !analyzing && <button onClick={() => setStep(1)} style={{ marginTop: 14, marginLeft: 10, background: "#fff", color: C.green, border: `1px solid ${C.green}`, padding: "12px 22px", borderRadius: 4, fontWeight: 600, fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>Next: map the site plan →</button>}
-              {analyzing && <div style={{ marginTop: 12, fontSize: 13, color: C.sage }}>Reading the documents and building the analysis — a large package (like a full OEA plus amendments) can take a minute or two. You can leave this running.</div>}
+              {analyzing && <div style={{ marginTop: 12, fontSize: 13, color: C.sage }}>
+                <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: C.accent, marginRight: 8, animation: "pulse 1.2s ease-in-out infinite" }} />
+                {progress || "Starting…"} You can leave this running.
+              </div>}
             </div>
             {analysis && <div><AnalysisReport data={analysis} /></div>}
           </div>
@@ -426,7 +437,7 @@ export default function App() {
 
       <div style={{ textAlign: "center", padding: 20, color: C.cement, fontSize: 11 }}>
         Created by Chris Rubio · Preliminary analysis only — not legal advice. Confirm all findings against the executed REA with counsel.
-        <div style={{ marginTop: 6, opacity: 0.5 }}>build v8-diag</div>
+        <div style={{ marginTop: 6, opacity: 0.5 }}>build v9-progress</div>
       </div>
     </div>
   );
