@@ -4,26 +4,17 @@
 // exactly as positioned on screen.
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
-import { PLAYFAIR_REGULAR, PLAYFAIR_BOLD } from "./playfairFont";
 
 const BRAND = {
   green: "#003F2D", darkGreen: "#012A2D", sage: "#538184", accent: "#17E88F",
   amber: "#E8A33D", red: "#C0392B", grey: "#435254", cement: "#7F8480",
-  light: "#EFECD2",
+  ink: "#1A1F1D", light: "#EFECD2", hair: "#D8E0DB",
 };
 
-// Register Playfair Display (the site's heading serif) with a jsPDF instance.
-let _fontsReady = false;
-function registerFonts(doc) {
-  try {
-    doc.addFileToVFS("Playfair-Regular.ttf", PLAYFAIR_REGULAR);
-    doc.addFont("Playfair-Regular.ttf", "Playfair", "normal");
-    doc.addFileToVFS("Playfair-Bold.ttf", PLAYFAIR_BOLD);
-    doc.addFont("Playfair-Bold.ttf", "Playfair", "bold");
-    _fontsReady = true;
-  } catch (e) { _fontsReady = false; }
-}
-const serif = (doc, weight) => doc.setFont(_fontsReady ? "Playfair" : "times", weight || "normal");
+// Clean all-sans type system (modern corporate look). Headings use bold
+// Helvetica with a disciplined size scale; body uses regular Helvetica.
+function registerFonts() { /* no custom fonts; Helvetica is built in and crisp */ }
+const head = (doc) => doc.setFont("helvetica", "bold");
 const sans = (doc, weight) => doc.setFont("helvetica", weight || "normal");
 
 // Snapshot a DOM element (the map stage) to a PNG data URL.
@@ -57,7 +48,7 @@ export async function generateReportPdf({ analysis, propName, propAddr, mapImage
   const setFill = (h) => { const n = parseInt(h.slice(1), 16); doc.setFillColor((n >> 16) & 255, (n >> 8) & 255, n & 255); };
   const setText = (h) => { const n = parseInt(h.slice(1), 16); doc.setTextColor((n >> 16) & 255, (n >> 8) & 255, n & 255); };
 
-  registerFonts(doc);
+  registerFonts();
 
   // page break helper
   const need = (h) => { if (y + h > PH - M) { doc.addPage(); y = M; } };
@@ -69,42 +60,58 @@ export async function generateReportPdf({ analysis, propName, propAddr, mapImage
     .replace(/[“”]/g, '"')
     .replace(/…/g, "...");
 
-  // ---- Solid header band ----
-  const HB = 80;
-  setFill(BRAND.darkGreen); doc.rect(0, 0, PW, HB, "F");
+  // Helper: draw letter-spaced text (jsPDF has no native tracking).
+  const spaced = (text, x, yy, gap) => {
+    let cx = x;
+    for (const ch of String(text)) { doc.text(ch, cx, yy); cx += doc.getTextWidth(ch) + (gap || 1.2); }
+    return cx - x;
+  };
+
+  // ---- Header band with the real CBRE logo ----
+  const HB = 82;
+  setFill(BRAND.ink); doc.rect(0, 0, PW, HB, "F");
   setFill(BRAND.accent); doc.rect(0, HB, PW, 2.5, "F"); // mint accent rule
 
-  // CBRE wordmark rendered as crisp text (the source logo image is low-res and
-  // pixelates when scaled; the wordmark is a bold sans caps, so text is sharper).
-  doc.setTextColor(255, 255, 255); sans(doc, "bold"); doc.setFontSize(26);
-  doc.text("CBRE", M, 42);
-  setText(BRAND.accent); sans(doc, "bold"); doc.setFontSize(7);
-  doc.text("EV INFRASTRUCTURE SOLUTIONS", M, 58);
-  doc.setTextColor(255, 255, 255); sans(doc, "normal"); doc.setFontSize(8.5);
-  doc.text("REA / OEA EV SITING ANALYSIS", PW - M, 38, { align: "right" });
+  const logo = await loadImageDataUrl("/cbre-pdf-logo-green.png");
+  let logoDrawn = false;
+  if (logo) {
+    try {
+      const lp = doc.getImageProperties(logo);
+      const lh = 18, lw = (lp.width / lp.height) * lh;
+      doc.addImage(logo, "PNG", M, 28, lw, lh);
+      logoDrawn = true;
+    } catch (e) { logoDrawn = false; }
+  }
+  if (!logoDrawn) { doc.setTextColor(255, 255, 255); sans(doc, "bold"); doc.setFontSize(24); doc.text("CBRE", M, 42); }
+  setText(BRAND.accent); sans(doc, "bold"); doc.setFontSize(6.5);
+  spaced("EV INFRASTRUCTURE SOLUTIONS", M, 60, 1.1);
+
+  doc.setTextColor(255, 255, 255); sans(doc, "bold"); doc.setFontSize(8);
+  const rt = "REA / OEA EV SITING ANALYSIS";
+  doc.text(rt, PW - M, 38, { align: "right" });
   const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+  setText(BRAND.sage); sans(doc, "normal"); doc.setFontSize(8);
   doc.text(today, PW - M, 54, { align: "right" });
 
-  // ---- Title block (serif, like the site) ----
-  y = HB + 46;
-  setText(BRAND.darkGreen); serif(doc, "bold"); doc.setFontSize(24);
-  // Wrap on a slightly tighter width to avoid the embedded-font width rounding
-  // that was clipping long names.
-  const titleLines = doc.splitTextToSize(clean(propName || "Untitled Property"), CW - 4);
-  titleLines.forEach((ln) => { need(30); doc.text(ln, M, y); y += 28; });
-  if (propAddr) { setText(BRAND.cement); sans(doc, "normal"); doc.setFontSize(11); doc.text(clean(propAddr), M, y); y += 16; }
-  y += 16;
+  // ---- Title block (big bold sans, clean corporate) ----
+  y = HB + 48;
+  setText(BRAND.ink); head(doc); doc.setFontSize(28);
+  const titleLines = doc.splitTextToSize(clean(propName || "Untitled Property"), CW);
+  titleLines.forEach((ln) => { need(34); doc.text(ln, M, y); y += 33; });
+  if (propAddr) { setText(BRAND.cement); sans(doc, "normal"); doc.setFontSize(11.5); doc.text(clean(propAddr), M, y); y += 14; }
+  // subtle divider under the title
+  y += 10; setFill(BRAND.hair); doc.rect(M, y, CW, 0.8, "F"); y += 6;
 
-  // section title helper — green eyebrow (rule + caps label) + serif title, like the site
+  // section title helper — accent rule + caps eyebrow + bold sans title
   const sectionTitle = (num, title) => {
-    need(54); y += 16;
-    setFill(BRAND.accent); doc.rect(M, y - 3.5, 20, 2, "F"); // short accent rule
-    setText(BRAND.sage); sans(doc, "bold"); doc.setFontSize(8);
-    doc.text((num || "SECTION").toUpperCase(), M + 28, y);
-    y += 17;
-    setText(BRAND.darkGreen); serif(doc, "bold"); doc.setFontSize(17);
-    const tl = doc.splitTextToSize(clean(title), CW); tl.forEach((l) => { doc.text(l, M, y); y += 20; });
-    y += 4;
+    need(50); y += 22;
+    setText(BRAND.sage); sans(doc, "bold"); doc.setFontSize(7.5);
+    setFill(BRAND.accent); doc.rect(M, y - 3, 18, 2, "F");
+    spaced((num || "SECTION").toUpperCase(), M + 26, y, 0.9);
+    y += 16;
+    setText(BRAND.ink); head(doc); doc.setFontSize(16);
+    const tl = doc.splitTextToSize(clean(title), CW); tl.forEach((l) => { doc.text(l, M, y); y += 19; });
+    y += 6;
   };
   // Normalize AI punctuation: em/en dashes -> hyphen, smart quotes -> straight.
   const para = (text, color, size, indent) => {
