@@ -210,10 +210,24 @@ export default function App() {
     finally { setDrafting(false); }
   };
   const autoDraft = async () => {
-    if (!imgSrc) return;
+    if (!imgSrc) { setError("Upload a site plan first (PDF or image), then auto-draft zones."); return; }
     setError(""); setDrafting(true);
     try {
-      const resp = await fetch("/.netlify/functions/draft-zones", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageBase64: imgSrc.split(",")[1], mediaType: imgType, analysis }) });
+      // imgSrc may be a data URL (fresh upload) or a remote https URL (a loaded
+      // saved property). The function needs raw base64 + media type, so resolve
+      // either case to base64 here.
+      let imageBase64, mediaType = imgType;
+      if (imgSrc.startsWith("data:")) {
+        imageBase64 = imgSrc.split(",")[1];
+        if (!mediaType) mediaType = (imgSrc.match(/^data:(.*?);/) || [])[1] || "image/jpeg";
+      } else {
+        const r = await fetch(imgSrc);
+        const blob = await r.blob();
+        mediaType = blob.type || "image/jpeg";
+        imageBase64 = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result.split(",")[1]); fr.onerror = rej; fr.readAsDataURL(blob); });
+      }
+      if (!imageBase64) { setError("The site plan image couldn't be read. Try re-uploading it."); setDrafting(false); return; }
+      const resp = await fetch("/.netlify/functions/draft-zones", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageBase64, mediaType, analysis }) });
       const data = await readApiJson(resp);
       const parsed = extractJson(data);
       const drafted = (parsed.zones || []).map((z) => ({
@@ -560,7 +574,7 @@ export default function App() {
           <div style={{ color: "#fff", opacity: 0.6, fontSize: 11, marginTop: 6 }}>
             © {new Date().getFullYear()} CBRE, Inc. All Rights Reserved. Confidential &amp; Proprietary.
           </div>
-          <div style={{ color: "#fff", opacity: 0.3, fontSize: 10, marginTop: 10 }}>build v22-draftpath</div>
+          <div style={{ color: "#fff", opacity: 0.3, fontSize: 10, marginTop: 10 }}>build v23-draftimg</div>
         </div>
       </div>
     </div>
