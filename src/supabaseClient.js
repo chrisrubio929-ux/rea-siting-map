@@ -84,6 +84,14 @@ export async function listProperties() {
   return data || [];
 }
 
+// Delete a property. Its site_maps and zones are removed automatically by the
+// database (ON DELETE CASCADE in the schema).
+export async function deleteProperty(propertyId) {
+  if (!supabaseReady) throw new Error("Supabase is not configured.");
+  const { error } = await supabase.from("properties").delete().eq("id", propertyId);
+  if (error) throw error;
+}
+
 export async function loadProperty(propertyId) {
   if (!supabaseReady) throw new Error("Supabase is not configured.");
   const { data: maps, error: me } = await supabase

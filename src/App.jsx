@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
-import { supabaseReady, supabaseUrl, supabaseAnonKey, saveProperty, listProperties, loadProperty, createJob, pollJob, uploadReaDoc } from "./supabaseClient";
+import { supabaseReady, supabaseUrl, supabaseAnonKey, saveProperty, listProperties, loadProperty, createJob, pollJob, uploadReaDoc, deleteProperty } from "./supabaseClient";
 import { generateReportPdf, captureElement } from "./reportPdf";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -82,6 +82,9 @@ export default function App() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [library, setLibrary] = useState([]);
+  const [libQuery, setLibQuery] = useState("");
+  const [libShowAll, setLibShowAll] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
 
   const [reaFiles, setReaFiles] = useState([]);
   const [propInfo, setPropInfo] = useState("");
@@ -106,6 +109,14 @@ export default function App() {
 
   useEffect(() => { refreshLibrary(); }, []);
   const refreshLibrary = async () => { if (!supabaseReady) return; try { setLibrary(await listProperties()); } catch (e) {} };
+  const removeProperty = async (p, e) => {
+    if (e) e.stopPropagation();
+    if (!window.confirm(`Delete "${p.name}"? This removes its analysis, site plan, and zones. This cannot be undone.`)) return;
+    setDeletingId(p.id);
+    try { await deleteProperty(p.id); setLibrary((lib) => lib.filter((x) => x.id !== p.id)); }
+    catch (err) { setError("Couldn't delete: " + (err.message || err)); }
+    finally { setDeletingId(null); }
+  };
 
   const resetAll = () => {
     setStep(0); setPropName(""); setPropAddr(""); setError(""); setNotice("");
@@ -347,25 +358,57 @@ export default function App() {
         {error && <div style={{ marginBottom: 16, padding: 12, background: "#FBEAEA", color: C.red, borderRadius: 4, fontSize: 14, border: `1px solid ${C.red}` }}>{error}</div>}
         {notice && <div style={{ marginBottom: 16, padding: 12, background: C.celadonTint + "44", color: C.green, borderRadius: 4, fontSize: 14, border: `1px solid ${C.sage}` }}>{notice}</div>}
 
-        {supabaseReady && library.length > 0 && onLibrary && step === 0 && (
-          <div style={{ marginBottom: 28 }}>
-            <SectionHead eyebrow="SAVED PROPERTIES" title="Property Library" />
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 }}>
-              {library.map((p) => (
-                <div key={p.id} onClick={() => openProperty(p)} style={{ background: "#fff", border: `1px solid ${C.celadonTint}`, borderRadius: 6, overflow: "hidden", cursor: "pointer" }}>
-                  {p.site_maps && p.site_maps[0]
-                    ? <img src={p.site_maps[0].image_url} alt="" style={{ width: "100%", height: 110, objectFit: "cover", display: "block" }} />
-                    : <div style={{ height: 110, background: C.celadonTint + "33", display: "flex", alignItems: "center", justifyContent: "center", color: C.sage, fontSize: 13 }}>Analysis only</div>}
-                  <div style={{ padding: 12 }}>
-                    <div style={{ fontWeight: 600, fontSize: 14, color: C.green }}>{p.name}</div>
-                    {p.address && <div style={{ fontSize: 12, color: C.cement, marginTop: 2 }}>{p.address}</div>}
-                  </div>
-                </div>
-              ))}
+        {supabaseReady && library.length > 0 && onLibrary && step === 0 && (() => {
+          const q = libQuery.trim().toLowerCase();
+          const filtered = q
+            ? library.filter((p) => (p.name || "").toLowerCase().includes(q) || (p.address || "").toLowerCase().includes(q))
+            : library;
+          const RECENT = 6;
+          const expanded = libShowAll || !!q; // searching always shows all matches
+          const shown = expanded ? filtered : filtered.slice(0, RECENT);
+          return (
+          <div style={{ marginBottom: 32 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12 }}>
+              <SectionHead eyebrow="SAVED PROPERTIES" title="Property Library" />
+              <input value={libQuery} onChange={(e) => setLibQuery(e.target.value)} placeholder="Search by name or address…"
+                style={{ ...inp, width: 260, marginTop: 0, marginBottom: 24 }} />
             </div>
-            <div style={{ borderTop: `1px solid ${C.celadonTint}`, margin: "24px 0 0" }} />
+
+            {filtered.length === 0 ? (
+              <div style={{ fontSize: 14, color: C.cement, padding: "8px 0 20px" }}>No properties match "{libQuery}".</div>
+            ) : (
+              <>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 14 }}>
+                  {shown.map((p) => (
+                    <div key={p.id} onClick={() => openProperty(p)} style={{ position: "relative", background: "#fff", border: `1px solid ${C.celadonTint}`, borderRadius: 8, overflow: "hidden", cursor: "pointer", boxShadow: "0 1px 6px rgba(1,42,45,.04)" }}>
+                      <button title="Delete property" onClick={(e) => removeProperty(p, e)} disabled={deletingId === p.id}
+                        style={{ position: "absolute", top: 8, right: 8, zIndex: 2, width: 26, height: 26, borderRadius: "50%", border: "none", background: "rgba(255,255,255,.92)", color: C.red, cursor: "pointer", fontSize: 15, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 1px 4px rgba(0,0,0,.15)" }}>
+                        {deletingId === p.id ? "…" : "×"}
+                      </button>
+                      {p.site_maps && p.site_maps[0]
+                        ? <img src={p.site_maps[0].image_url} alt="" style={{ width: "100%", height: 110, objectFit: "cover", display: "block" }} />
+                        : <div style={{ height: 110, background: C.celadonTint + "33", display: "flex", alignItems: "center", justifyContent: "center", color: C.sage, fontSize: 13 }}>Analysis only</div>}
+                      <div style={{ padding: 12 }}>
+                        <div style={{ fontWeight: 600, fontSize: 14, color: C.green, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</div>
+                        {p.address && <div style={{ fontSize: 12, color: C.cement, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.address}</div>}
+                        {p.created_at && <div style={{ fontSize: 11, color: C.celadon, marginTop: 6 }}>{new Date(p.created_at).toLocaleDateString()}</div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {!q && filtered.length > RECENT && (
+                  <button onClick={() => setLibShowAll((v) => !v)}
+                    style={{ marginTop: 16, background: "transparent", color: C.green, border: `1px solid ${C.green}`, padding: "9px 18px", borderRadius: 4, fontWeight: 600, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>
+                    {libShowAll ? "Show less" : `View all ${filtered.length} properties`}
+                  </button>
+                )}
+              </>
+            )}
+            <div style={{ borderTop: `1px solid ${C.celadonTint}`, margin: "28px 0 0" }} />
           </div>
-        )}
+          );
+        })()}
 
         {step === 0 && (
           <div className="layout" style={{ display: "grid", gridTemplateColumns: analysis ? "380px 1fr" : "1fr", gap: 24, alignItems: "start" }}>
@@ -517,7 +560,7 @@ export default function App() {
           <div style={{ color: "#fff", opacity: 0.6, fontSize: 11, marginTop: 6 }}>
             © {new Date().getFullYear()} CBRE, Inc. All Rights Reserved. Confidential &amp; Proprietary.
           </div>
-          <div style={{ color: "#fff", opacity: 0.3, fontSize: 10, marginTop: 10 }}>build v19</div>
+          <div style={{ color: "#fff", opacity: 0.3, fontSize: 10, marginTop: 10 }}>build v20-library</div>
         </div>
       </div>
     </div>
