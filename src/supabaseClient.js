@@ -42,12 +42,20 @@ export async function pollJob(jobId) {
 
 // ---- Data helpers ----
 
-export async function saveProperty({ name, address, imageBlob, imageType, zones, analysis }) {
+export async function saveProperty({ id, name, address, imageBlob, imageType, zones, analysis }) {
   if (!supabaseReady) throw new Error("Supabase is not configured.");
 
-  // 1. property row (with the written analysis)
-  const prop = await supabase.from("properties").insert({ name, address, analysis: analysis || null }).select().single();
-  if (prop.error) throw prop.error;
+  // 1. property row (with the written analysis) — update in place if id given.
+  let prop;
+  if (id) {
+    prop = await supabase.from("properties").update({ name, address, analysis: analysis || null }).eq("id", id).select().single();
+    if (prop.error) throw prop.error;
+    // replace existing maps/zones for this property (cascade removes old zones)
+    await supabase.from("site_maps").delete().eq("property_id", id);
+  } else {
+    prop = await supabase.from("properties").insert({ name, address, analysis: analysis || null }).select().single();
+    if (prop.error) throw prop.error;
+  }
 
   // if there's a site plan, upload it and create a map + zones
   if (imageBlob) {

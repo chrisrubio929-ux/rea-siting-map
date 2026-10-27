@@ -164,13 +164,56 @@ export default function App() {
   const [drafting, setDrafting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [openedId, setOpenedId] = useState(null); // id of a saved property we're editing
+  const [savedClean, setSavedClean] = useState(true); // false = unsaved changes
 
   const reaRef = useRef();
   const planRef = useRef();
   const stageRef = useRef();
   const drag = useRef(null);
+  const draftLoaded = useRef(false);
 
-  useEffect(() => { refreshLibrary(); }, []);
+  const DRAFT_KEY = "rea-draft-v1";
+
+  // Restore an in-progress draft on first load (survives refresh).
+  useEffect(() => {
+    refreshLibrary();
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (raw) {
+        const d = JSON.parse(raw);
+        if (d && (d.analysis || d.propName || (d.zones && d.zones.length))) {
+          if (d.analysis) setAnalysis(d.analysis);
+          if (d.propName) setPropName(d.propName);
+          if (d.propAddr) setPropAddr(d.propAddr);
+          if (d.propInfo) setPropInfo(d.propInfo);
+          if (d.imgSrc) { setImgSrc(d.imgSrc); setImgType(d.imgType || "image/jpeg"); }
+          if (d.zones) setZones(d.zones);
+          if (d.openedId) setOpenedId(d.openedId);
+          setSavedClean(d.savedClean !== false ? true : false);
+        }
+      }
+    } catch (e) {}
+    draftLoaded.current = true;
+  }, []);
+
+  // Persist the working draft whenever meaningful state changes.
+  useEffect(() => {
+    if (!draftLoaded.current) return;
+    try {
+      const hasWork = analysis || propName || (zones && zones.length) || imgSrc;
+      if (!hasWork) { localStorage.removeItem(DRAFT_KEY); return; }
+      // Only stash the site-plan image if it's small enough for localStorage (~5MB cap);
+      // the analysis + zones always persist even if the image is too big to keep.
+      const keepImg = imgSrc && imgSrc.length < 2_000_000 ? imgSrc : null;
+      const payload = JSON.stringify({ analysis, propName, propAddr, propInfo, imgSrc: keepImg, imgType, zones, openedId, savedClean });
+      try { localStorage.setItem(DRAFT_KEY, payload); }
+      catch (e2) {
+        // Over quota: retry without the image.
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({ analysis, propName, propAddr, propInfo, imgSrc: null, imgType, zones, openedId, savedClean }));
+      }
+    } catch (e) { /* storage unavailable; ignore */ }
+  }, [analysis, propName, propAddr, propInfo, imgSrc, imgType, zones, openedId, savedClean]);
   const refreshLibrary = async () => { if (!supabaseReady) return; try { setLibrary(await listProperties()); } catch (e) {} };
   const removeProperty = async (p, e) => {
     if (e) e.stopPropagation();
@@ -185,6 +228,8 @@ export default function App() {
     setStep(0); setPropName(""); setPropAddr(""); setError(""); setNotice("");
     setReaFiles([]); setPropInfo(""); setAnalysis(null);
     setImgSrc(null); setImgType(null); setImgBlob(null); setZones([]); setSelected(null); setPdfPages(null);
+    setOpenedId(null); setSavedClean(true);
+    try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
   };
 
   const runAnalysis = async () => {
@@ -222,7 +267,7 @@ export default function App() {
           let job;
           try { job = await pollJob(jobId); }
           catch (pe) { continue; }
-          if (job.status === "done") { setProgress(""); setAnalysis(job.result); return; }
+          if (job.status === "done") { setProgress(""); setAnalysis(job.result); setSavedClean(false); return; }
           if (job.status === "error") throw new Error(job.error || "analysis failed");
           if (job.status === "running") sawRunning = true;
           if (!sawRunning && secs > 45) {
@@ -241,7 +286,7 @@ export default function App() {
         body: JSON.stringify({ documents, propInfo }),
       });
       const data = await readApiJson(resp);
-      setProgress(""); setAnalysis(extractJson(data));
+      setProgress(""); setAnalysis(extractJson(data)); setSavedClean(false);
     } catch (e) { setError("Couldn't analyze the documents: " + e.message); }
     finally { setAnalyzing(false); setProgress(""); }
   };
@@ -308,7 +353,7 @@ export default function App() {
         x: clamp(z.x), y: clamp(z.y), w: clamp(z.w, 0.05), h: clamp(z.h, 0.05),
       }));
       if (drafted.length === 0) setError("No clear parking zones found on this page. Make sure you picked the site-plan page, or add zones manually.");
-      else setZones(drafted);
+      else { setZones(drafted); setSavedClean(false); }
     } catch (e) {
       const msg = /took too long|timed out|status 502|status 504/i.test(e.message)
         ? "the site plan took too long to analyze. Try a simpler or lower-resolution plan image, or add zones manually."
@@ -343,8 +388,10 @@ export default function App() {
     if (!propName.trim()) { setError("Give the property a name before saving."); return; }
     setError(""); setNotice(""); setSaving(true);
     try {
-      await saveProperty({ name: propName.trim(), address: propAddr.trim(), imageBlob: imgBlob, imageType: imgType, zones, analysis });
-      setNotice(`Saved "${propName.trim()}" to the property library.`);
+      const saved = await saveProperty({ id: openedId || undefined, name: propName.trim(), address: propAddr.trim(), imageBlob: imgBlob, imageType: imgType, zones, analysis });
+      if (saved && saved.id) setOpenedId(saved.id); // so further saves update the same record
+      setSavedClean(true);
+      setNotice(openedId ? `Updated "${propName.trim()}" in the property library.` : `Saved "${propName.trim()}" to the property library.`);
       refreshLibrary();
     } catch (e) { setError("Save failed: " + (e.message || e) + ". Check Supabase setup and that the schema SQL (incl. the analysis column) has been run."); }
     finally { setSaving(false); }
@@ -378,6 +425,8 @@ export default function App() {
       setAnalysis(p.analysis || null);
       setPropName(p.name); setPropAddr(p.address || "");
       if (imageUrl) { setImgSrc(imageUrl); setImgBlob(null); setImgType(null); setZones(zs); }
+      else { setZones([]); }
+      setOpenedId(p.id); setSavedClean(true); // editing this saved record; re-save updates it
       setStep(p.analysis ? 0 : 1);
     } catch (e) { setError("Couldn't open that property: " + (e.message || e)); }
   };
@@ -454,6 +503,12 @@ export default function App() {
         )}
         {error && <div style={{ marginBottom: 16, padding: 12, background: "#FBEAEA", color: C.red, borderRadius: 4, fontSize: 14, border: `1px solid ${C.red}` }}>{error}</div>}
         {notice && <div style={{ marginBottom: 16, padding: 12, background: C.celadonTint + "44", color: C.green, borderRadius: 4, fontSize: 14, border: `1px solid ${C.sage}` }}>{notice}</div>}
+        {supabaseReady && !savedClean && analysis && !onLibrary && (
+          <div style={{ marginBottom: 16, padding: "10px 14px", background: C.wheatTint, border: `1px solid ${C.wheat}`, borderRadius: 4, fontSize: 13, color: C.darkGrey, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+            <span><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: C.amber, marginRight: 8 }} /><strong>Draft · not saved.</strong> Your work is kept in this browser, but save to the library to keep it for your team and across devices.</span>
+            <button onClick={() => setStep(2)} style={{ background: C.green, color: "#fff", border: "none", padding: "7px 14px", borderRadius: 4, fontWeight: 600, fontSize: 12.5, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>Go to Save →</button>
+          </div>
+        )}
 
         {supabaseReady && library.length > 0 && onLibrary && step === 0 && (() => {
           const q = libQuery.trim().toLowerCase();
@@ -657,7 +712,7 @@ export default function App() {
           <div style={{ color: "#fff", opacity: 0.6, fontSize: 11, marginTop: 6 }}>
             © {new Date().getFullYear()} CBRE, Inc. All Rights Reserved. Confidential &amp; Proprietary.
           </div>
-          <div style={{ color: "#fff", opacity: 0.3, fontSize: 10, marginTop: 10 }}>build v27-draftspeed</div>
+          <div style={{ color: "#fff", opacity: 0.3, fontSize: 10, marginTop: 10 }}>build v28-persist</div>
         </div>
       </div>
     </div>
