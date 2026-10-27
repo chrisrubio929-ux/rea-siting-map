@@ -426,6 +426,7 @@ export default function App() {
 
       <div style={{ textAlign: "center", padding: 20, color: C.cement, fontSize: 11 }}>
         Created by Chris Rubio · Preliminary analysis only — not legal advice. Confirm all findings against the executed REA with counsel.
+        <div style={{ marginTop: 6, opacity: 0.5 }}>build v8-diag</div>
       </div>
     </div>
   );
