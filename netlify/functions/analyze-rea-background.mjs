@@ -30,8 +30,11 @@ export default async (req) => {
     const { documents, propInfo } = body;
     const supabase = createClient(supaUrl, supaKey);
 
-    const apiKey = (process.env.ANTHROPIC_API_KEY || "").trim();
+    const rawKey = process.env.ANTHROPIC_API_KEY || "";
+    const apiKey = rawKey.trim();
     if (!apiKey) throw new Error("Server is missing ANTHROPIC_API_KEY.");
+    // --- diagnostic fingerprint of the key the function actually received ---
+    const keyInfo = `len=${rawKey.length}(trimmed ${apiKey.length}) prefix="${apiKey.slice(0, 14)}"`;
 
     const content = [];
     documents.forEach((d, i) => {
@@ -46,7 +49,10 @@ export default async (req) => {
       body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 6000, system: SYSTEM_PROMPT, messages: [{ role: "user", content }] }),
     });
     const data = await r.json();
-    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+    if (data.error) {
+      const reason = data.error.message || JSON.stringify(data.error);
+      throw new Error(`[HTTP ${r.status}] ${reason} — key the function saw: ${keyInfo}`);
+    }
     const text = (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("\n");
     const match = text.match(/\{[\s\S]*\}/);
     const parsed = JSON.parse((match ? match[0] : text).replace(/```json|```/g, "").trim());

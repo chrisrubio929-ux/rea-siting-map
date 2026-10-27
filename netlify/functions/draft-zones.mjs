@@ -26,7 +26,7 @@ export default async (req) => {
   if (req.method !== "POST") {
     return json({ error: "Method not allowed" }, 405);
   }
-  const apiKey = (process.env.ANTHROPIC_API_KEY || "").trim();
+  const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return json({ error: "Server is missing ANTHROPIC_API_KEY. Add it in Netlify environment variables." }, 500);
   }
