@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
-import { supabaseReady, saveProperty, listProperties, loadProperty } from "./supabaseClient";
+import { supabaseReady, supabaseUrl, supabaseAnonKey, saveProperty, listProperties, loadProperty, createJob, pollJob } from "./supabaseClient";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
@@ -40,6 +40,31 @@ function dataURLtoBlob(dataURL) {
   return new Blob([arr], { type: mime });
 }
 const fileToBase64 = (file) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result.split(",")[1]); r.onerror = () => rej(new Error("read failed")); r.readAsDataURL(file); });
+
+// Read an API response safely. If the server returned an HTML error page
+// (e.g. a function timeout or size limit), give a clear message instead of
+// a cryptic "Unexpected token '<'" JSON error.
+async function readApiJson(resp) {
+  const raw = await resp.text();
+  let data;
+  try { data = JSON.parse(raw); }
+  catch {
+    if (resp.status === 502 || resp.status === 504 || /timed out|timeout/i.test(raw)) {
+      throw new Error("the request took too long (the document set is large). Try analyzing fewer documents at once — e.g. the base agreement plus only the most recent amendments.");
+    }
+    if (resp.status === 413 || /too large|payload/i.test(raw)) {
+      throw new Error("the upload was too large for one request. Try fewer or smaller PDFs at once.");
+    }
+    throw new Error("the server returned an unexpected response (status " + resp.status + "). Try again, or with fewer documents.");
+  }
+  if (data.error) throw new Error(data.error.message || data.error);
+  return data;
+}
+function extractJson(data) {
+  const text = (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("\n");
+  const match = text.match(/\{[\s\S]*\}/);
+  return JSON.parse((match ? match[0] : text).replace(/```json|```/g, "").trim());
+}
 
 const STEPS = ["Analysis", "Map", "Save"];
 
@@ -85,14 +110,30 @@ export default function App() {
     try {
       const documents = [];
       for (const f of reaFiles) documents.push({ name: f.name, base64: await fileToBase64(f) });
-      const resp = await fetch("/api/analyze-rea", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ documents, propInfo }) });
-      const data = await resp.json();
-      if (data.error) throw new Error(data.error.message || data.error);
-      const text = (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("\n");
-      const match = text.match(/\{[\s\S]*\}/);
-      const parsed = JSON.parse((match ? match[0] : text).replace(/```json|```/g, "").trim());
-      setAnalysis(parsed);
-    } catch (e) { setError("Couldn't analyze the documents: " + e.message + ". Make sure they're text-based PDFs."); }
+
+      if (supabaseReady) {
+        // Background flow: no timeout, handles large document packages.
+        const jobId = await createJob();
+        await fetch("/api/analyze-rea-background", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ jobId, documents, propInfo, supabaseUrl, supabaseKey: supabaseAnonKey }),
+        });
+        // poll until done (up to ~5 minutes)
+        const started = Date.now();
+        while (Date.now() - started < 5 * 60 * 1000) {
+          await new Promise((r) => setTimeout(r, 3000));
+          const job = await pollJob(jobId);
+          if (job.status === "done") { setAnalysis(job.result); return; }
+          if (job.status === "error") throw new Error(job.error || "analysis failed");
+        }
+        throw new Error("the analysis is taking unusually long. Try fewer documents, or check back shortly.");
+      } else {
+        // No database configured — use the direct (timeout-limited) endpoint.
+        const resp = await fetch("/api/analyze-rea", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ documents, propInfo }) });
+        const data = await readApiJson(resp);
+        setAnalysis(extractJson(data));
+      }
+    } catch (e) { setError("Couldn't analyze the documents: " + e.message); }
     finally { setAnalyzing(false); }
   };
 
@@ -127,11 +168,8 @@ export default function App() {
     setError(""); setDrafting(true);
     try {
       const resp = await fetch("/api/draft-zones", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageBase64: imgSrc.split(",")[1], mediaType: imgType, analysis }) });
-      const data = await resp.json();
-      if (data.error) throw new Error(data.error.message || data.error);
-      const text = (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("\n");
-      const match = text.match(/\{[\s\S]*\}/);
-      const parsed = JSON.parse((match ? match[0] : text).replace(/```json|```/g, "").trim());
+      const data = await readApiJson(resp);
+      const parsed = extractJson(data);
       const drafted = (parsed.zones || []).map((z) => ({
         id: newId(), label: z.label || "Zone",
         viability: VIABILITY[z.viability] ? z.viability : "Conditional",
@@ -271,7 +309,8 @@ export default function App() {
                 style={{ marginTop: 14, background: analyzing ? C.cement : C.green, color: "#fff", border: "none", padding: "12px 22px", borderRadius: 4, fontWeight: 600, fontSize: 14, cursor: analyzing ? "default" : "pointer", fontFamily: "inherit" }}>
                 {analyzing ? "Analyzing…" : analysis ? "Re-run analysis" : "Analyze documents"}
               </button>
-              {analysis && <button onClick={() => setStep(1)} style={{ marginTop: 14, marginLeft: 10, background: "#fff", color: C.green, border: `1px solid ${C.green}`, padding: "12px 22px", borderRadius: 4, fontWeight: 600, fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>Next: map the site plan →</button>}
+              {analysis && !analyzing && <button onClick={() => setStep(1)} style={{ marginTop: 14, marginLeft: 10, background: "#fff", color: C.green, border: `1px solid ${C.green}`, padding: "12px 22px", borderRadius: 4, fontWeight: 600, fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>Next: map the site plan →</button>}
+              {analyzing && <div style={{ marginTop: 12, fontSize: 13, color: C.sage }}>Reading the documents and building the analysis — a large package (like a full OEA plus amendments) can take a minute or two. You can leave this running.</div>}
             </div>
             {analysis && <div><AnalysisReport data={analysis} /></div>}
           </div>

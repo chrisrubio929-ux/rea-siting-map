@@ -11,9 +11,15 @@ A single guided flow for EV siting at retail centers:
 Built with React + Vite, deployed on Netlify, data in Supabase, AI by Claude.
 
 ### Already deployed an earlier version?
-Run **`supabase/migration-add-analysis.sql`** once in the Supabase SQL Editor —
-it adds the column that stores the written analysis. (A fresh install using
-`schema.sql` already includes it.)
+Run these once in the Supabase SQL Editor (safe to run again):
+- **`supabase/migration-add-analysis.sql`** — column that stores the written analysis.
+- **`supabase/migration-add-jobs.sql`** — the `jobs` table for background analysis.
+
+### Why a background function?
+A full OEA plus amendments can take ~60 seconds for the AI — longer than any
+serverless function may run. So the analysis runs in a **background function**
+(`analyze-rea-background.mjs`, up to 15 min) that writes its result to the `jobs`
+table; the browser polls that table and shows a progress note. No timeouts.
 
 ---
 

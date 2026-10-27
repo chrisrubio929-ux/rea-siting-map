@@ -3,6 +3,17 @@
   publish = "dist"
   functions = "netlify/functions"
 
+# Give the AI functions the full synchronous budget (26s) so large REA
+# packages and site plans have time to process.
+[functions]
+  node_bundler = "esbuild"
+
+[functions."analyze-rea"]
+  timeout = 26
+
+[functions."draft-zones"]
+  timeout = 26
+
 [dev]
   command = "npm run dev"
   targetPort = 5173

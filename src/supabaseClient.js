@@ -7,8 +7,22 @@ const url = import.meta.env.VITE_SUPABASE_URL;
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export const supabaseReady = Boolean(url && anonKey);
+export const supabaseUrl = url;
+export const supabaseAnonKey = anonKey;
 
 export const supabase = supabaseReady ? createClient(url, anonKey) : null;
+
+// ---- Background job helpers (for long analyses) ----
+export async function createJob() {
+  const { data, error } = await supabase.from("jobs").insert({ kind: "analysis", status: "pending" }).select().single();
+  if (error) throw error;
+  return data.id;
+}
+export async function pollJob(jobId) {
+  const { data, error } = await supabase.from("jobs").select("status, result, error").eq("id", jobId).single();
+  if (error) throw error;
+  return data;
+}
 
 // ---- Data helpers ----
 
