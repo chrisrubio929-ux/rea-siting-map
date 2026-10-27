@@ -30,7 +30,7 @@ export default async (req) => {
     const { documents, propInfo } = body;
     const supabase = createClient(supaUrl, supaKey);
 
-    const apiKey = process.env.ANTHROPIC_API_KEY;
+    const apiKey = (process.env.ANTHROPIC_API_KEY || "").trim();
     if (!apiKey) throw new Error("Server is missing ANTHROPIC_API_KEY.");
 
     const content = [];

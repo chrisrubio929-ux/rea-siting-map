@@ -20,7 +20,7 @@ Be rigorous and conservative. If the agreement is silent on a topic, say so rath
 
 export default async (req) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = (process.env.ANTHROPIC_API_KEY || "").trim();
   if (!apiKey) return json({ error: "Server is missing ANTHROPIC_API_KEY." }, 500);
   try {
     const { documents, propInfo } = await req.json(); // documents: [{name, base64}]
