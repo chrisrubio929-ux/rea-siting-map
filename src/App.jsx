@@ -112,34 +112,51 @@ export default function App() {
       const documents = [];
       for (const f of reaFiles) documents.push({ name: f.name, base64: await fileToBase64(f) });
 
-      if (supabaseReady) {
-        // Background flow: no timeout, handles large document packages.
-        setProgress("Uploading documents…");
-        const jobId = await createJob();
-        setProgress("Sending to the analysis engine…");
-        await fetch("/api/analyze-rea-background", {
+      // Try the direct (synchronous) function first — it's reliable and fast for
+      // normal document packages (a base agreement plus a few amendments finish
+      // well inside the function's time budget). Only if it times out do we fall
+      // back to the background-job path, which has no time limit but depends on
+      // background functions being available on the hosting plan.
+      setProgress("Reading the documents and reasoning through the agreement…");
+      try {
+        const resp = await fetch("/api/analyze-rea", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ jobId, documents, propInfo, supabaseUrl, supabaseKey: supabaseAnonKey }),
+          body: JSON.stringify({ documents, propInfo }),
         });
-        // poll until done (up to ~12 minutes — background functions can run 15)
-        const started = Date.now();
-        while (Date.now() - started < 12 * 60 * 1000) {
-          await new Promise((r) => setTimeout(r, 3000));
-          const secs = Math.round((Date.now() - started) / 1000);
-          setProgress(`Reading the documents and reasoning through the agreement… ${secs}s elapsed (this is normal for a large package).`);
-          let job;
-          try { job = await pollJob(jobId); }
-          catch (pe) { setProgress(`Checking status… (${secs}s) — reconnecting`); continue; }
-          if (job.status === "done") { setProgress(""); setAnalysis(job.result); return; }
-          if (job.status === "error") throw new Error(job.error || "analysis failed");
-        }
-        throw new Error("the analysis is taking unusually long (over 12 minutes). This usually means the document package is very large — try the base agreement plus only the most recent amendments.");
-      } else {
-        // No database configured — use the direct (timeout-limited) endpoint.
-        const resp = await fetch("/api/analyze-rea", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ documents, propInfo }) });
         const data = await readApiJson(resp);
-        setAnalysis(extractJson(data));
+        setProgress(""); setAnalysis(extractJson(data));
+        return;
+      } catch (syncErr) {
+        // If it's a timeout/too-large signal AND we have a database, try background.
+        const isTimeout = /too long|timeout|timed out|unexpected response|too large/i.test(syncErr.message);
+        if (!supabaseReady || !isTimeout) throw syncErr;
+        setProgress("Large package detected — switching to the extended analysis engine…");
       }
+
+      // ---- Background fallback (no time limit) ----
+      const jobId = await createJob();
+      setProgress("Sending to the extended analysis engine…");
+      await fetch("/api/analyze-rea-background", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId, documents, propInfo, supabaseUrl, supabaseKey: supabaseAnonKey }),
+      });
+      const started = Date.now();
+      let sawRunning = false;
+      while (Date.now() - started < 12 * 60 * 1000) {
+        await new Promise((r) => setTimeout(r, 3000));
+        const secs = Math.round((Date.now() - started) / 1000);
+        setProgress(`Extended analysis running… ${secs}s elapsed (large packages can take a few minutes).`);
+        let job;
+        try { job = await pollJob(jobId); }
+        catch (pe) { continue; }
+        if (job.status === "done") { setProgress(""); setAnalysis(job.result); return; }
+        if (job.status === "error") throw new Error(job.error || "analysis failed");
+        // Guard: if after 45s the job is still 'pending' and never moved, the
+        // background function likely isn't running on this plan — fail clearly.
+        if (job.status === "pending") { if (secs > 45 && !sawRunning) { /* keep waiting a bit more */ } }
+        else { sawRunning = true; }
+      }
+      throw new Error("the analysis timed out. For a very large package, try the base agreement plus only the most recent amendments.");
     } catch (e) { setError("Couldn't analyze the documents: " + e.message); }
     finally { setAnalyzing(false); setProgress(""); }
   };
@@ -437,7 +454,7 @@ export default function App() {
 
       <div style={{ textAlign: "center", padding: 20, color: C.cement, fontSize: 11 }}>
         Created by Chris Rubio · Preliminary analysis only — not legal advice. Confirm all findings against the executed REA with counsel.
-        <div style={{ marginTop: 6, opacity: 0.5 }}>build v9-progress</div>
+        <div style={{ marginTop: 6, opacity: 0.5 }}>build v10-syncfirst</div>
       </div>
     </div>
   );
