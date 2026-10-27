@@ -45,42 +45,29 @@ export async function generateReportPdf({ analysis, propName, propAddr, mapImage
   // page break helper
   const need = (h) => { if (y + h > PH - M) { doc.addPage(); y = M; } };
 
-  // ---- Header band with the banner photo ----
-  const HB = 92; // header band height
-  const banner = await loadImageDataUrl("/banner.jpg");
-  if (banner) {
-    try {
-      // cover-fit the banner across the full width of the band
-      const props = doc.getImageProperties(banner);
-      const scale = Math.max(PW / props.width, HB / props.height);
-      const w = props.width * scale, h = props.height * scale;
-      doc.addImage(banner, "JPEG", (PW - w) / 2, (HB - h) / 2, w, h);
-    } catch (e) { setFill(BRAND.darkGreen); doc.rect(0, 0, PW, HB, "F"); }
-  } else { setFill(BRAND.darkGreen); doc.rect(0, 0, PW, HB, "F"); }
-  // dark gradient-style overlay (left solid -> lighter right) for legible text
-  setFill(BRAND.darkGreen);
-  doc.setGState && doc.setGState(new doc.GState({ opacity: 0.72 }));
-  doc.rect(0, 0, PW * 0.62, HB, "F");
-  doc.setGState && doc.setGState(new doc.GState({ opacity: 0.45 }));
-  doc.rect(PW * 0.62, 0, PW * 0.38, HB, "F");
-  doc.setGState && doc.setGState(new doc.GState({ opacity: 1 }));
+  // ---- Clean solid header band (no photo; readability first) ----
+  const HB = 76;
+  setFill(BRAND.darkGreen); doc.rect(0, 0, PW, HB, "F");
+  // thin mint accent rule along the bottom of the band
+  setFill("#17E88F"); doc.rect(0, HB, PW, 2.5, "F");
 
   doc.setTextColor(255, 255, 255);
-  doc.setFont("helvetica", "bold"); doc.setFontSize(22);
-  doc.text("CBRE", M, 42);
-  doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-  setText("#17E88F"); doc.text("EV INFRASTRUCTURE SOLUTIONS", M, 58);
-  doc.setTextColor(255, 255, 255); doc.setFontSize(9);
-  doc.text("REA / OEA EV SITING ANALYSIS", PW - M, 42, { align: "right" });
+  doc.setFont("helvetica", "bold"); doc.setFontSize(20);
+  doc.text("CBRE", M, 36);
+  setText("#17E88F"); doc.setFont("helvetica", "normal"); doc.setFontSize(8);
+  doc.text("EV INFRASTRUCTURE SOLUTIONS", M, 52);
+  doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "normal"); doc.setFontSize(8.5);
+  doc.text("REA / OEA EV SITING ANALYSIS", PW - M, 36, { align: "right" });
   const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-  doc.text(today, PW - M, 58, { align: "right" });
-  y = 120;
+  doc.text(today, PW - M, 52, { align: "right" });
 
-  // ---- Title ----
-  setText(BRAND.green); doc.setFont("helvetica", "bold"); doc.setFontSize(20);
-  doc.text(propName || "Untitled Property", M, y); y += 22;
+  // ---- Title block (below the band, on white) ----
+  y = HB + 36;
+  setText(BRAND.darkGreen); doc.setFont("helvetica", "bold"); doc.setFontSize(19);
+  const titleLines = doc.splitTextToSize(propName || "Untitled Property", CW);
+  titleLines.forEach((ln) => { doc.text(ln, M, y); y += 23; });
   if (propAddr) { setText(BRAND.cement); doc.setFont("helvetica", "normal"); doc.setFontSize(11); doc.text(propAddr, M, y); y += 18; }
-  y += 6;
+  y += 10;
 
   // section title helper
   const sectionTitle = (num, title) => {
@@ -138,17 +125,23 @@ export async function generateReportPdf({ analysis, propName, propAddr, mapImage
     y += 18;
 
     if (zones && zones.length) {
+      y += 6;
+      setText(BRAND.darkGreen); doc.setFont("helvetica", "bold"); doc.setFontSize(9); need(14);
+      doc.text("ZONE DETAIL", M, y); y += 14;
       zones.forEach((z) => {
-        need(18);
+        need(22);
         const v = z.viability === "Best" ? BRAND.green : z.viability === "Conditional" ? BRAND.amber : BRAND.red;
-        setFill(v); doc.circle(M + 4, y - 3, 3, "F");
-        setText(BRAND.darkGreen); doc.setFont("helvetica", "bold"); doc.setFontSize(10);
-        doc.text(clean(z.label || "Zone"), M + 14, y);
-        setText(BRAND.cement); doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-        const meta = [z.controllingParty && `Controlled by: ${z.controllingParty}`, z.approval && `Approval: ${z.approval}`].filter(Boolean).join("   ");
-        if (meta) { y += 13; const ln = doc.splitTextToSize(clean(meta), CW - 14); ln.forEach((l) => { need(13); doc.text(l, M + 14, y); y += 12; }); }
+        setFill(v); doc.circle(M + 4, y - 3, 3.2, "F");
+        setText(BRAND.darkGreen); doc.setFont("helvetica", "bold"); doc.setFontSize(10.5);
+        const labelLines = doc.splitTextToSize(clean(z.label || "Zone") + "  (" + (z.viability || "") + ")", CW - 16);
+        labelLines.forEach((l, i) => { need(14); doc.text(l, M + 14, y); y += 13; });
+        setText(BRAND.grey); doc.setFont("helvetica", "normal"); doc.setFontSize(9.5);
+        if (z.controllingParty) { const ln = doc.splitTextToSize("Controlled by: " + clean(z.controllingParty), CW - 16); ln.forEach((l) => { need(12); doc.text(l, M + 14, y); y += 12; }); }
+        if (z.approval) { const ln = doc.splitTextToSize("Approval: " + clean(z.approval), CW - 16); ln.forEach((l) => { need(12); doc.text(l, M + 14, y); y += 12; }); }
         y += 8;
       });
+    } else {
+      para("No zones were drafted on the site plan. Add zones on the Map step to include them here.", BRAND.cement, 9.5);
     }
   }
 
@@ -160,33 +153,36 @@ export async function generateReportPdf({ analysis, propName, propAddr, mapImage
   }
   // 02 Parties
   if (a.parties?.length) { sectionTitle("02", "Controlling Parties"); a.parties.forEach((p) => { labelVal(`${p.name}  |  ${p.role || ""}`, p.controlsAreas); }); }
-  // 03 Control Zones
+  // 03 Control Zones — title on its own line(s), chip on the line below (no overlap)
   if (a.controlZones?.length) { sectionTitle("03", "Control Zones & EV Viability"); a.controlZones.forEach((z) => {
-    need(20); setText(BRAND.darkGreen); doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.text(clean(z.zone || "Zone"), M, y);
+    need(34);
+    setText(BRAND.darkGreen); doc.setFont("helvetica", "bold"); doc.setFontSize(11.5);
+    const tl = doc.splitTextToSize(clean(z.zone || "Zone"), CW); tl.forEach((l) => { need(16); doc.text(l, M, y); y += 15; });
     const vc = z.evViable === "Yes" ? BRAND.green : z.evViable === "Conditional" ? BRAND.amber : BRAND.red;
-    chip("EV: " + (z.evViable || "?"), vc, M + 220, y); y += 15;
-    if (z.controllingParty) para("Controlled by: " + z.controllingParty, BRAND.cement, 9.5);
+    y += 2; chip("EV viability: " + (z.evViable || "?"), vc, M, y); y += 16;
+    if (z.controllingParty) para("Controlled by: " + z.controllingParty, BRAND.grey, 9.5);
     if (z.rationale) para(z.rationale, BRAND.grey, 10);
-    if (z.constraints) para("⚠ " + z.constraints, BRAND.amber, 9.5);
-    y += 6;
+    if (z.constraints) para("Constraint: " + z.constraints, BRAND.orange, 9.5);
+    y += 10;
   }); }
   // 04 Approval Matrix
   if (a.approvalMatrix?.length) { sectionTitle("04", "Approval Matrix"); a.approvalMatrix.forEach((m) => {
-    need(18); setText(BRAND.green); doc.setFont("helvetica", "bold"); doc.setFontSize(10.5);
-    const h = doc.splitTextToSize(clean(m.action || ""), CW - 90); h.forEach((l) => { need(14); doc.text(l, M, y); y += 13; });
+    need(34); setText(BRAND.darkGreen); doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+    const h = doc.splitTextToSize(clean(m.action || ""), CW); h.forEach((l) => { need(15); doc.text(l, M, y); y += 14; });
     const dc = m.difficulty === "Low" ? BRAND.sage : m.difficulty === "Medium" ? BRAND.amber : BRAND.red;
-    chip((m.difficulty || "?") + " effort", dc, M, y); y += 16;
+    y += 2; chip((m.difficulty || "?") + " effort", dc, M, y); y += 16;
     if (m.approvalRequired) para("Approval required: " + m.approvalRequired, BRAND.grey, 10);
-    if (m.basis) para("Basis: " + m.basis, BRAND.cement, 9.5);
-    y += 6;
+    if (m.basis) para("Basis: " + m.basis, BRAND.grey, 9.5);
+    y += 10;
   }); }
-  // 05 EV Restrictions
+  // 05 EV Restrictions — chip on its own line above the topic (no overlap)
   if (a.evRestrictions?.length) { sectionTitle("05", "EV-Relevant REA Language"); a.evRestrictions.forEach((r) => {
-    need(16); const rc = r.type === "Permitted" ? BRAND.green : r.type === "Silent" ? BRAND.cement : r.type === "Restricted" ? BRAND.amber : BRAND.red;
-    const cw = chip(r.type || "?", rc, M, y);
-    setText(BRAND.darkGreen); doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.text(clean(r.topic || ""), M + cw + 8, y); y += 15;
+    need(32); const rc = r.type === "Permitted" ? BRAND.green : r.type === "Silent" ? BRAND.cement : r.type === "Restricted" ? BRAND.amber : BRAND.red;
+    chip(r.type || "?", rc, M, y); y += 16;
+    setText(BRAND.darkGreen); doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+    const tp = doc.splitTextToSize(clean(r.topic || ""), CW); tp.forEach((l) => { need(15); doc.text(l, M, y); y += 14; });
     if (r.detail) para(r.detail, BRAND.grey, 10);
-    y += 6;
+    y += 10;
   }); }
   // 06 Recommended Zones
   if (a.recommendedZones?.length) { sectionTitle("06", "Recommended Zones"); a.recommendedZones.forEach((z, i) => {
