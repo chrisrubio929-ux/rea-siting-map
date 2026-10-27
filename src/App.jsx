@@ -6,6 +6,7 @@ import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
 const CBRE_LOGO = "/CBRE_logo.png";
+const BANNER = "/banner.jpg";
 
 const C = {
   green: "#003F2D", darkGreen: "#012A2D", darkGrey: "#435254", accent: "#17E88F",
@@ -51,7 +52,7 @@ async function readApiJson(resp) {
   try { data = JSON.parse(raw); }
   catch {
     if (resp.status === 502 || resp.status === 504 || /timed out|timeout/i.test(raw)) {
-      throw new Error("the request took too long (the document set is large). Try analyzing fewer documents at once — e.g. the base agreement plus only the most recent amendments.");
+      throw new Error("the request took too long (the document set is large). Try analyzing fewer documents at once. For example, the base agreement plus only the most recent amendments.");
     }
     if (resp.status === 413 || /too large|payload/i.test(raw)) {
       throw new Error("the upload was too large for one request. Try fewer or smaller PDFs at once.");
@@ -150,13 +151,13 @@ export default function App() {
           if (job.status === "error") throw new Error(job.error || "analysis failed");
           if (job.status === "running") sawRunning = true;
           if (!sawRunning && secs > 45) {
-            throw new Error("the background analysis never started. Check the function logs — I can fix the cause.");
+            throw new Error("the background analysis never started. Check the function logs; I can fix the cause.");
           }
         }
         throw new Error("the analysis timed out after 12 minutes. For a very large package, try the base agreement plus only the most recent amendments.");
       }
 
-      // ---- Path B: no Supabase (quick demo) — small files only, direct call ----
+      // ---- Path B: no Supabase (quick demo): small files only, direct call ----
       setProgress("Reading the documents and reasoning through the agreement…");
       const documents = [];
       for (const f of reaFiles) documents.push({ name: f.name, base64: await fileToBase64(f) });
@@ -206,7 +207,7 @@ export default function App() {
       const drafted = (parsed.zones || []).map((z) => ({
         id: newId(), label: z.label || "Zone",
         viability: VIABILITY[z.viability] ? z.viability : "Conditional",
-        controllingParty: z.controllingParty || "Unknown — confirm in REA", approval: z.approval || "",
+        controllingParty: z.controllingParty || "Unknown, confirm in REA", approval: z.approval || "",
         x: clamp(z.x), y: clamp(z.y), w: clamp(z.w, 0.05), h: clamp(z.h, 0.05),
       }));
       if (drafted.length === 0) setError("No clear parking zones found on this page. Make sure you picked the site-plan page, or add zones manually.");
@@ -217,7 +218,7 @@ export default function App() {
 
   const updateZone = (id, patch) => setZones((zs) => zs.map((z) => (z.id === id ? { ...z, ...patch } : z)));
   const removeZone = (id) => { setZones((zs) => zs.filter((z) => z.id !== id)); setSelected(null); };
-  const addZone = () => { const z = { id: newId(), label: "New zone", viability: "Conditional", controllingParty: "Unknown — confirm in REA", approval: "", x: 0.35, y: 0.4, w: 0.3, h: 0.18 }; setZones((zs) => [...zs, z]); setSelected(z.id); };
+  const addZone = () => { const z = { id: newId(), label: "New zone", viability: "Conditional", controllingParty: "Unknown, confirm in REA", approval: "", x: 0.35, y: 0.4, w: 0.3, h: 0.18 }; setZones((zs) => [...zs, z]); setSelected(z.id); };
 
   const onPointerDown = (e, id, mode) => {
     e.stopPropagation();
@@ -236,7 +237,7 @@ export default function App() {
   const onPointerUp = useCallback(() => { drag.current = null; window.removeEventListener("pointermove", onPointerMove); window.removeEventListener("pointerup", onPointerUp); }, []);
 
   const doSave = async () => {
-    if (!supabaseReady) { setError("Supabase isn't configured — add your VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY env vars."); return; }
+    if (!supabaseReady) { setError("Supabase isn't configured: add your VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY env vars."); return; }
     if (!propName.trim()) { setError("Give the property a name before saving."); return; }
     setError(""); setNotice(""); setSaving(true);
     try {
@@ -287,19 +288,21 @@ export default function App() {
         @keyframes pulse { 0%,100%{opacity:1;transform:scale(1);} 50%{opacity:0.35;transform:scale(0.7);} }
       `}</style>
 
-      <div style={{ background: C.darkGreen, padding: "20px 24px" }}>
-        <div style={{ maxWidth: 1280, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <img src={CBRE_LOGO} alt="CBRE" style={{ height: 32 }} />
-          <div style={{ color: C.celadon, fontSize: 11, letterSpacing: 2 }}>EV INFRASTRUCTURE SOLUTIONS</div>
-        </div>
-      </div>
-
-      <div style={{ background: C.green, padding: "32px 24px 0", borderBottom: `3px solid ${C.accent}` }}>
+      <div style={{
+        position: "relative",
+        backgroundImage: `linear-gradient(90deg, ${hexA(C.darkGreen, 0.92)} 0%, ${hexA(C.darkGreen, 0.72)} 45%, ${hexA(C.darkGreen, 0.35)} 100%), url(${BANNER})`,
+        backgroundSize: "cover", backgroundPosition: "center right",
+        padding: "22px 24px 0", borderBottom: `3px solid ${C.accent}`,
+      }}>
         <div style={{ maxWidth: 1280, margin: "0 auto" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28 }}>
+            <img src={CBRE_LOGO} alt="CBRE" style={{ height: 32 }} />
+            <div style={{ color: C.white, fontSize: 11, letterSpacing: 2, textShadow: "0 1px 4px rgba(0,0,0,.5)" }}>EV INFRASTRUCTURE SOLUTIONS</div>
+          </div>
           <div style={{ color: C.accent, fontSize: 12, letterSpacing: 3, marginBottom: 12 }}>REA ANALYSIS &amp; SITE MAP</div>
-          <h1 className="fin" style={{ color: C.white, fontSize: 38, margin: 0, fontWeight: 500 }}>EV Siting Workbench</h1>
-          <p style={{ color: C.celadonTint, margin: "10px 0 24px", fontSize: 16, maxWidth: 720 }}>
-            Analyze the REA, map the charging zones onto the site plan, and save the property — in one flow.
+          <h1 className="fin" style={{ color: C.white, fontSize: 38, margin: 0, fontWeight: 500, textShadow: "0 2px 8px rgba(0,0,0,.4)" }}>EV Siting Workbench</h1>
+          <p style={{ color: C.white, margin: "10px 0 24px", fontSize: 16, maxWidth: 620, textShadow: "0 1px 6px rgba(0,0,0,.5)" }}>
+            Analyze the REA, map the charging zones onto the site plan, and save the property, all in one flow.
           </p>
           <div style={{ display: "flex", gap: 4 }}>
             {STEPS.map((s, i) => (
@@ -346,7 +349,7 @@ export default function App() {
         {step === 0 && (
           <div className="layout" style={{ display: "grid", gridTemplateColumns: analysis ? "380px 1fr" : "1fr", gap: 24, alignItems: "start" }}>
             <div>
-              <div className="fin" style={{ fontSize: 22, color: C.green, marginBottom: 12 }}>Step 1 — Analyze the REA / OEA</div>
+              <div className="fin" style={{ fontSize: 22, color: C.green, marginBottom: 12 }}>Step 1: Analyze the REA / OEA</div>
               <MultiUpload label="REA / OEA document(s)" hint="PDF · base agreement plus any amendments" files={reaFiles} inputRef={reaRef}
                 onAdd={(fs) => setReaFiles((p) => [...p, ...fs])} onRemove={(i) => setReaFiles((p) => p.filter((_, x) => x !== i))} />
               <label style={{ display: "block", marginTop: 16, fontWeight: 600, fontSize: 13, color: C.darkGrey }}>Property context (optional)</label>
@@ -370,7 +373,7 @@ export default function App() {
 
         {step === 1 && (
           <div>
-            <div className="fin" style={{ fontSize: 22, color: C.green, marginBottom: 6 }}>Step 2 — Map the site plan</div>
+            <div className="fin" style={{ fontSize: 22, color: C.green, marginBottom: 6 }}>Step 2: Map the site plan</div>
             {analysis && <div style={{ fontSize: 13, color: C.sage, marginBottom: 16 }}>✓ Zones will be drafted using your REA analysis (real parties &amp; approvals).</div>}
             {pdfPages ? (
               <div>
@@ -462,7 +465,7 @@ export default function App() {
 
         {step === 2 && (
           <div style={{ maxWidth: 560 }}>
-            <div className="fin" style={{ fontSize: 22, color: C.green, marginBottom: 14 }}>Step 3 — Save the property</div>
+            <div className="fin" style={{ fontSize: 22, color: C.green, marginBottom: 14 }}>Step 3: Save the property</div>
             <div style={{ background: "#fff", border: `1px solid ${C.celadonTint}`, borderRadius: 6, padding: 20 }}>
               <div style={{ fontSize: 14, color: C.darkGrey, marginBottom: 16 }}>
                 Saving includes: {analysis ? "the written analysis" : "no analysis"}{imgSrc ? ", the site-plan map" : ""}{zones.length ? `, and ${zones.length} zone(s)` : ""}.
@@ -478,8 +481,9 @@ export default function App() {
       </div>
 
       <div style={{ textAlign: "center", padding: 20, color: C.cement, fontSize: 11 }}>
-        Created by Chris Rubio · Preliminary analysis only — not legal advice. Confirm all findings against the executed REA with counsel.
-        <div style={{ marginTop: 6, opacity: 0.5 }}>build v15-pdf</div>
+        <div>Created by Chris Rubio | chris.rubio2@cbre.com | <a href="https://www.linkedin.com/in/rubio-chris/" target="_blank" rel="noopener noreferrer" style={{ color: C.sage }}>linkedin.com/in/rubio-chris</a></div>
+        <div style={{ marginTop: 4 }}>Preliminary analysis only. Not legal advice. Confirm all findings against the executed REA with counsel.</div>
+        <div style={{ marginTop: 6, opacity: 0.5 }}>build v16-banner</div>
       </div>
     </div>
   );
