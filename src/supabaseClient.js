@@ -12,6 +12,22 @@ export const supabaseAnonKey = anonKey;
 
 export const supabase = supabaseReady ? createClient(url, anonKey) : null;
 
+// ---- REA document upload (avoids Netlify's ~6MB request limit) ----
+// Uploads a PDF to the rea-docs bucket and returns a public URL the analysis
+// function can download server-side. Large PDFs base64-encode to more than
+// Netlify allows in a request body, so we never send the file through the function.
+export async function uploadReaDoc(file) {
+  if (!supabaseReady) throw new Error("Supabase is not configured.");
+  const safeName = (file.name || "document.pdf").replace(/[^a-zA-Z0-9._-]/g, "_");
+  const path = `${Date.now()}-${Math.random().toString(36).slice(2)}-${safeName}`;
+  const up = await supabase.storage.from("rea-docs").upload(path, file, {
+    contentType: file.type || "application/pdf",
+  });
+  if (up.error) throw up.error;
+  const { data: pub } = supabase.storage.from("rea-docs").getPublicUrl(path);
+  return { name: file.name, url: pub.publicUrl };
+}
+
 // ---- Background job helpers (for long analyses) ----
 export async function createJob() {
   const { data, error } = await supabase.from("jobs").insert({ kind: "analysis", status: "pending" }).select().single();

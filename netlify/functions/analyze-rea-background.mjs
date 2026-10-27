@@ -28,8 +28,10 @@ export default async (req) => {
   try {
     const body = await req.json();
     jobId = body.jobId; supaUrl = body.supabaseUrl; supaKey = body.supabaseKey;
-    const { documents, propInfo } = body;
-    console.log(`[analyze-rea-background] jobId=${jobId} docs=${documents ? documents.length : "none"} supaUrl=${supaUrl ? "yes" : "no"} supaKey=${supaKey ? "yes" : "no"}`);
+    // docRefs: [{ name, url }] — PDFs uploaded to Supabase Storage. We download
+    // them here (server-side) so large files never pass through the request body.
+    const { docRefs, propInfo } = body;
+    console.log(`[analyze-rea-background] jobId=${jobId} docRefs=${docRefs ? docRefs.length : "none"} supaUrl=${supaUrl ? "yes" : "no"} supaKey=${supaKey ? "yes" : "no"}`);
     const supabase = createClient(supaUrl, supaKey);
     // mark the job as running so the browser can tell it actually started
     await supabase.from("jobs").update({ status: "running" }).eq("id", jobId);
@@ -37,8 +39,20 @@ export default async (req) => {
     const rawKey = process.env.ANTHROPIC_API_KEY || "";
     const apiKey = rawKey.trim();
     if (!apiKey) throw new Error("Server is missing ANTHROPIC_API_KEY.");
-    // --- diagnostic fingerprint of the key the function actually received ---
-    const keyInfo = `len=${rawKey.length}(trimmed ${apiKey.length}) prefix="${apiKey.slice(0, 14)}"`;
+
+    if (!docRefs || !docRefs.length) throw new Error("No documents were provided to analyze.");
+
+    // Download each PDF from its Supabase URL and base64-encode it server-side.
+    const documents = [];
+    for (let i = 0; i < docRefs.length; i++) {
+      const ref = docRefs[i];
+      console.log(`[analyze-rea-background] downloading doc ${i + 1}: ${ref.name}`);
+      const fileResp = await fetch(ref.url);
+      if (!fileResp.ok) throw new Error(`Could not download "${ref.name}" (status ${fileResp.status}).`);
+      const buf = Buffer.from(await fileResp.arrayBuffer());
+      documents.push({ name: ref.name, base64: buf.toString("base64") });
+    }
+    console.log(`[analyze-rea-background] downloaded ${documents.length} document(s), calling Anthropic`);
 
     const content = [];
     documents.forEach((d, i) => {
@@ -55,7 +69,7 @@ export default async (req) => {
     const data = await r.json();
     if (data.error) {
       const reason = data.error.message || JSON.stringify(data.error);
-      throw new Error(`[HTTP ${r.status}] ${reason} — key the function saw: ${keyInfo}`);
+      throw new Error(`[HTTP ${r.status}] ${reason}`);
     }
     const text = (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("\n");
     const match = text.match(/\{[\s\S]*\}/);

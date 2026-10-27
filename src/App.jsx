@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
-import { supabaseReady, supabaseUrl, supabaseAnonKey, saveProperty, listProperties, loadProperty, createJob, pollJob } from "./supabaseClient";
+import { supabaseReady, supabaseUrl, supabaseAnonKey, saveProperty, listProperties, loadProperty, createJob, pollJob, uploadReaDoc } from "./supabaseClient";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
@@ -113,67 +113,57 @@ export default function App() {
     if (reaFiles.length === 0) { setError("Upload at least one REA/OEA document."); return; }
     setError(""); setAnalyzing(true);
     try {
+      // ---- Path A: Supabase configured (the normal case) ----
+      // Upload the PDFs to storage first, then hand the function just the URLs.
+      // This keeps the request to Netlify tiny, so large PDFs never trip the
+      // ~6MB function request limit (HTTP 413).
+      if (supabaseReady) {
+        setProgress("Uploading documents…");
+        const docRefs = [];
+        for (let i = 0; i < reaFiles.length; i++) {
+          setProgress(`Uploading documents… (${i + 1} of ${reaFiles.length})`);
+          docRefs.push(await uploadReaDoc(reaFiles[i]));
+        }
+
+        const jobId = await createJob();
+        setProgress("Sending to the analysis engine…");
+        const bgResp = await fetch("/.netlify/functions/analyze-rea-background", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ jobId, docRefs, propInfo, supabaseUrl, supabaseKey: supabaseAnonKey }),
+        });
+        if (bgResp.status !== 202) {
+          throw new Error(`the analysis engine did not accept the job (status ${bgResp.status}).`);
+        }
+
+        const started = Date.now();
+        let sawRunning = false;
+        while (Date.now() - started < 12 * 60 * 1000) {
+          await new Promise((r) => setTimeout(r, 3000));
+          const secs = Math.round((Date.now() - started) / 1000);
+          setProgress(`Reading the documents and reasoning through the agreement… ${secs}s elapsed.`);
+          let job;
+          try { job = await pollJob(jobId); }
+          catch (pe) { continue; }
+          if (job.status === "done") { setProgress(""); setAnalysis(job.result); return; }
+          if (job.status === "error") throw new Error(job.error || "analysis failed");
+          if (job.status === "running") sawRunning = true;
+          if (!sawRunning && secs > 45) {
+            throw new Error("the background analysis never started. Check the function logs — I can fix the cause.");
+          }
+        }
+        throw new Error("the analysis timed out after 12 minutes. For a very large package, try the base agreement plus only the most recent amendments.");
+      }
+
+      // ---- Path B: no Supabase (quick demo) — small files only, direct call ----
+      setProgress("Reading the documents and reasoning through the agreement…");
       const documents = [];
       for (const f of reaFiles) documents.push({ name: f.name, base64: await fileToBase64(f) });
-
-      // Try the direct (synchronous) function first — it's reliable and fast for
-      // normal document packages (a base agreement plus a few amendments finish
-      // well inside the function's time budget). Only if it times out do we fall
-      // back to the background-job path, which has no time limit but depends on
-      // background functions being available on the hosting plan.
-      setProgress("Reading the documents and reasoning through the agreement…");
-      try {
-        const resp = await fetch("/api/analyze-rea", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ documents, propInfo }),
-        });
-        const data = await readApiJson(resp);
-        setProgress(""); setAnalysis(extractJson(data));
-        return;
-      } catch (syncErr) {
-        // Only fall back to the background path on a genuine gateway timeout
-        // (status 502/504 or an explicit "took too long"). Every other error —
-        // an Anthropic error, a server crash, a bad response — is surfaced
-        // directly so we see the real reason instead of silently hanging.
-        const isRealTimeout = /took too long|timed out|status 502|status 504/i.test(syncErr.message);
-        if (!supabaseReady || !isRealTimeout) throw syncErr;
-        setProgress("This package is large — switching to the extended (no-time-limit) engine…");
-      }
-
-      // ---- Background fallback (no time limit) ----
-      // IMPORTANT: background functions must be invoked at their canonical
-      // /.netlify/functions/ path — a custom /api/ alias does NOT reliably
-      // trigger the background runner, which leaves the job stuck at 'pending'.
-      const jobId = await createJob();
-      setProgress("Sending to the extended analysis engine…");
-      const bgResp = await fetch("/.netlify/functions/analyze-rea-background", {
+      const resp = await fetch("/api/analyze-rea", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobId, documents, propInfo, supabaseUrl, supabaseKey: supabaseAnonKey }),
+        body: JSON.stringify({ documents, propInfo }),
       });
-      // Background functions return 202 Accepted immediately. Anything else
-      // means it wasn't accepted (e.g. 404 = not found at this path).
-      if (bgResp.status !== 202) {
-        throw new Error(`the analysis engine did not accept the job (status ${bgResp.status}). This is a routing issue I can fix.`);
-      }
-      const started = Date.now();
-      let sawRunning = false;
-      while (Date.now() - started < 12 * 60 * 1000) {
-        await new Promise((r) => setTimeout(r, 3000));
-        const secs = Math.round((Date.now() - started) / 1000);
-        setProgress(`Extended analysis running… ${secs}s elapsed (large packages can take a few minutes).`);
-        let job;
-        try { job = await pollJob(jobId); }
-        catch (pe) { continue; }
-        if (job.status === "done") { setProgress(""); setAnalysis(job.result); return; }
-        if (job.status === "error") throw new Error(job.error || "analysis failed");
-        if (job.status === "running") sawRunning = true;
-        // Guard: if after 40s the job never even reached 'running', the background
-        // function isn't executing — fail clearly instead of hanging for minutes.
-        if (!sawRunning && secs > 40) {
-          throw new Error("the background analysis never started (the job stayed queued). This usually points to the background function not being invoked. Check the function logs — I can fix the cause.");
-        }
-      }
-      throw new Error("the analysis timed out. For a very large package, try the base agreement plus only the most recent amendments.");
+      const data = await readApiJson(resp);
+      setProgress(""); setAnalysis(extractJson(data));
     } catch (e) { setError("Couldn't analyze the documents: " + e.message); }
     finally { setAnalyzing(false); setProgress(""); }
   };
@@ -471,7 +461,7 @@ export default function App() {
 
       <div style={{ textAlign: "center", padding: 20, color: C.cement, fontSize: 11 }}>
         Created by Chris Rubio · Preliminary analysis only — not legal advice. Confirm all findings against the executed REA with counsel.
-        <div style={{ marginTop: 6, opacity: 0.5 }}>build v13-bgpath</div>
+        <div style={{ marginTop: 6, opacity: 0.5 }}>build v14-storage</div>
       </div>
     </div>
   );
