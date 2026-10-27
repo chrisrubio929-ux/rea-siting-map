@@ -198,23 +198,23 @@ export async function generateReportPdf({ analysis, propName, propAddr, mapImage
   if (a.risks?.length) { sectionTitle("", "Risks & Unknowns"); a.risks.forEach((r) => para("• " + r, BRAND.grey, 10)); }
   if (a.nextSteps?.length) { sectionTitle("", "Next Steps"); a.nextSteps.forEach((s, i) => para(`${i + 1}. ${s}`, BRAND.grey, 10)); }
 
-  // ---- Footer on every page ----
+  // ---- Footer band on every page (sage-grey, matching the site footer) ----
   const pages = doc.getNumberOfPages();
+  const FB = 44; // footer band height
   for (let p = 1; p <= pages; p++) {
     doc.setPage(p);
-    // thin rule
-    setFill(BRAND.light); doc.rect(M, PH - 42, CW, 0.8, "F");
-    setText(BRAND.green); doc.setFont("helvetica", "bold"); doc.setFontSize(8);
+    setFill(BRAND.cement); doc.rect(0, PH - FB, PW, FB, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(8);
     doc.text("Created by Chris Rubio  |  chris.rubio2@cbre.com  |  linkedin.com/in/rubio-chris", M, PH - 28);
-    setText(BRAND.cement); doc.setFont("helvetica", "normal"); doc.setFontSize(7.5);
-    doc.text("Preliminary analysis only. Not legal advice. Confirm all findings against the executed REA with counsel.", M, PH - 17);
-    setText(BRAND.cement); doc.setFontSize(8);
-    doc.text(`${p} / ${pages}`, PW - M, PH - 22, { align: "right" });
-  }
-  // make the LinkedIn text a clickable link on every page
-  for (let p = 1; p <= pages; p++) {
-    doc.setPage(p);
-    doc.link(M + 196, PH - 36, 120, 12, { url: "https://www.linkedin.com/in/rubio-chris/" });
+    doc.setFont("helvetica", "normal"); doc.setFontSize(7);
+    doc.text("Preliminary analysis only. Not legal advice. Confirm all findings against the executed REA with counsel.", M, PH - 18);
+    doc.setFontSize(7);
+    doc.text(`© ${new Date().getFullYear()} CBRE, Inc. All Rights Reserved. Confidential & Proprietary.`, M, PH - 9);
+    doc.setFontSize(8);
+    doc.text(`${p} / ${pages}`, PW - M, PH - 18, { align: "right" });
+    // clickable LinkedIn
+    doc.link(M + 196, PH - 34, 120, 11, { url: "https://www.linkedin.com/in/rubio-chris/" });
   }
 
   const safe = (propName || "REA-Analysis").replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "");
