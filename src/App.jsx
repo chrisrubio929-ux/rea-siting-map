@@ -44,6 +44,29 @@ function dataURLtoBlob(dataURL) {
 }
 const fileToBase64 = (file) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result.split(",")[1]); r.onerror = () => rej(new Error("read failed")); r.readAsDataURL(file); });
 
+// Shrink a data URL so its largest side is <= maxPx. Returns { base64, mediaType }.
+// Used to speed up the AI vision call (smaller image = faster, no timeout).
+function downscaleDataUrl(dataUrl, maxPx) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const e = Math.max(img.naturalWidth, img.naturalHeight);
+        if (e <= maxPx) { resolve({ base64: dataUrl.split(",")[1], mediaType: (dataUrl.match(/^data:(.*?);/) || [])[1] || "image/jpeg" }); return; }
+        const scale = maxPx / e;
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.naturalWidth * scale);
+        canvas.height = Math.round(img.naturalHeight * scale);
+        canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+        const out = canvas.toDataURL("image/jpeg", 0.85);
+        resolve({ base64: out.split(",")[1], mediaType: "image/jpeg" });
+      } catch (err) { reject(err); }
+    };
+    img.onerror = () => reject(new Error("image load failed"));
+    img.src = dataUrl;
+  });
+}
+
 // Draw the site plan with its colored zone boxes + labels onto a canvas and
 // return a PNG data URL. Used for the PDF so the map is included even when the
 // map step isn't currently on screen (e.g. downloading from the Save step).
@@ -267,6 +290,14 @@ export default function App() {
         imageBase64 = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result.split(",")[1]); fr.onerror = rej; fr.readAsDataURL(blob); });
       }
       if (!imageBase64) { setError("The site plan image couldn't be read. Try re-uploading it."); setDrafting(false); return; }
+      // Downscale what we send to the vision model (the on-screen plan stays full
+      // res). A smaller image is faster for the model and avoids timeouts; ~1100px
+      // is plenty to detect parking fields and zones.
+      try {
+        const small = await downscaleDataUrl(imgSrc.startsWith("data:") ? imgSrc : `data:${mediaType};base64,${imageBase64}`, 1100);
+        if (small) { imageBase64 = small.base64; mediaType = small.mediaType; }
+      } catch (e) { /* fall back to original image */ }
+
       const resp = await fetch("/.netlify/functions/draft-zones", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageBase64, mediaType, analysis }) });
       const data = await readApiJson(resp);
       const parsed = extractJson(data);
@@ -278,7 +309,12 @@ export default function App() {
       }));
       if (drafted.length === 0) setError("No clear parking zones found on this page. Make sure you picked the site-plan page, or add zones manually.");
       else setZones(drafted);
-    } catch (e) { setError("Couldn't auto-draft zones: " + e.message + ". You can add zones manually."); }
+    } catch (e) {
+      const msg = /took too long|timed out|status 502|status 504/i.test(e.message)
+        ? "the site plan took too long to analyze. Try a simpler or lower-resolution plan image, or add zones manually."
+        : e.message;
+      setError("Couldn't auto-draft zones: " + msg + " You can add zones manually.");
+    }
     finally { setDrafting(false); }
   };
 
@@ -621,7 +657,7 @@ export default function App() {
           <div style={{ color: "#fff", opacity: 0.6, fontSize: 11, marginTop: 6 }}>
             © {new Date().getFullYear()} CBRE, Inc. All Rights Reserved. Confidential &amp; Proprietary.
           </div>
-          <div style={{ color: "#fff", opacity: 0.3, fontSize: 10, marginTop: 10 }}>build v26-pdffix</div>
+          <div style={{ color: "#fff", opacity: 0.3, fontSize: 10, marginTop: 10 }}>build v27-draftspeed</div>
         </div>
       </div>
     </div>
