@@ -502,35 +502,6 @@ export default function App() {
         )}
       </div>
 
-      {/* ---- Get in touch CTA (styled after the CBRE EV hospitality site) ---- */}
-      <div style={{ background: C.white, padding: "64px 24px 56px", borderTop: `1px solid ${C.celadonTint}` }}>
-        <div style={{ maxWidth: 1180, margin: "0 auto", textAlign: "center" }}>
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
-            <span style={{ width: 26, height: 2, background: C.accent }} />
-            <span style={{ color: C.sage, fontSize: 12, letterSpacing: 2, fontWeight: 600 }}>GET IN TOUCH</span>
-          </div>
-          <h2 className="fin" style={{ color: C.darkGreen, fontSize: 40, margin: "0 0 18px", fontWeight: 500 }}>Ready to Explore Your Options?</h2>
-          <p style={{ color: C.darkGrey, fontSize: 16, maxWidth: 680, margin: "0 auto 40px", lineHeight: 1.6 }}>
-            Connect with CBRE to evaluate EV charging strategies that support portfolio performance and long-term value.
-          </p>
-          <div style={{ display: "flex", justifyContent: "center" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 20, background: "#fff", border: `1px solid ${C.celadonTint}`, borderRadius: 10, padding: "22px 30px", maxWidth: 460, textAlign: "left", boxShadow: "0 2px 14px rgba(1,42,45,.06)" }}>
-              <div style={{ width: 58, height: 58, borderRadius: "50%", background: C.green, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 600, flexShrink: 0, fontFamily: "inherit" }}>CR</div>
-              <div>
-                <div style={{ fontSize: 17, fontWeight: 700, color: C.darkGreen }}>Chris Rubio</div>
-                <div style={{ fontSize: 13, color: C.cement, marginTop: 2 }}>Senior Director</div>
-                <div style={{ fontSize: 13, color: C.cement }}>CBRE EV Infrastructure Solutions</div>
-                <div style={{ marginTop: 10, fontSize: 13 }}>
-                  <a href="mailto:chris.rubio2@cbre.com" style={{ color: C.green, textDecoration: "none", fontWeight: 600 }}>chris.rubio2@cbre.com</a>
-                </div>
-                <div style={{ fontSize: 13, marginTop: 3 }}>
-                  <a href="https://www.linkedin.com/in/rubio-chris/" target="_blank" rel="noopener noreferrer" style={{ color: C.sage, textDecoration: "none" }}>linkedin.com/in/rubio-chris</a>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* ---- Footer band ---- */}
       <div style={{ background: C.cement, padding: "40px 24px 28px" }}>
@@ -546,7 +517,7 @@ export default function App() {
           <div style={{ color: "#fff", opacity: 0.6, fontSize: 11, marginTop: 6 }}>
             © {new Date().getFullYear()} CBRE, Inc. All Rights Reserved. Confidential &amp; Proprietary.
           </div>
-          <div style={{ color: "#fff", opacity: 0.3, fontSize: 10, marginTop: 10 }}>build v18-enterprise</div>
+          <div style={{ color: "#fff", opacity: 0.3, fontSize: 10, marginTop: 10 }}>build v19</div>
         </div>
       </div>
     </div>
