@@ -64,16 +64,25 @@ export default async (req) => {
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 6000, system: SYSTEM_PROMPT, messages: [{ role: "user", content }] }),
+      body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 16000, system: SYSTEM_PROMPT, messages: [{ role: "user", content }] }),
     });
     const data = await r.json();
     if (data.error) {
       const reason = data.error.message || JSON.stringify(data.error);
       throw new Error(`[HTTP ${r.status}] ${reason}`);
     }
+    // If the model ran out of output budget, the JSON is cut off and won't parse.
+    if (data.stop_reason === "max_tokens") {
+      throw new Error("the analysis was too long to return in one response (the document set is very large). Try the base agreement plus only the amendments you need, or split the package into two runs.");
+    }
     const text = (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("\n");
     const match = text.match(/\{[\s\S]*\}/);
-    const parsed = JSON.parse((match ? match[0] : text).replace(/```json|```/g, "").trim());
+    let parsed;
+    try {
+      parsed = JSON.parse((match ? match[0] : text).replace(/```json|```/g, "").trim());
+    } catch (pe) {
+      throw new Error("the analysis response was incomplete and could not be read. This usually means the document set is very large; try fewer documents at once (e.g. the base agreement plus key amendments).");
+    }
 
     console.log("[analyze-rea-background] analysis done, writing result");
     await supabase.from("jobs").update({ status: "done", result: parsed }).eq("id", jobId);
