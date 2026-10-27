@@ -62,64 +62,64 @@ export async function generateReportPdf({ analysis, propName, propAddr, mapImage
   // page break helper
   const need = (h) => { if (y + h > PH - M) { doc.addPage(); y = M; } };
 
-  // ---- Solid header band with the real CBRE logo ----
-  const HB = 78;
-  setFill(BRAND.darkGreen); doc.rect(0, 0, PW, HB, "F");
-  setFill(BRAND.accent); doc.rect(0, HB, PW, 2.5, "F"); // mint accent rule
-
-  const logo = await loadImageDataUrl("/cbre-pdf-logo.png");
-  if (logo) {
-    try {
-      const lp = doc.getImageProperties(logo);
-      const lh = 22, lw = (lp.width / lp.height) * lh;
-      doc.addImage(logo, "PNG", M, 24, lw, lh);
-    } catch (e) {
-      doc.setTextColor(255, 255, 255); sans(doc, "bold"); doc.setFontSize(20); doc.text("CBRE", M, 40);
-    }
-  } else { doc.setTextColor(255, 255, 255); sans(doc, "bold"); doc.setFontSize(20); doc.text("CBRE", M, 40); }
-
-  setText(BRAND.accent); sans(doc, "normal"); doc.setFontSize(7.5);
-  doc.text("EV INFRASTRUCTURE SOLUTIONS", M, 60);
-  doc.setTextColor(255, 255, 255); sans(doc, "normal"); doc.setFontSize(8.5);
-  doc.text("REA / OEA EV SITING ANALYSIS", PW - M, 36, { align: "right" });
-  const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-  doc.text(today, PW - M, 52, { align: "right" });
-
-  // ---- Title block (serif, like the site) ----
-  y = HB + 40;
-  setText(BRAND.darkGreen); serif(doc, "bold"); doc.setFontSize(26);
-  const titleLines = doc.splitTextToSize(propName || "Untitled Property", CW);
-  titleLines.forEach((ln) => { doc.text(ln, M, y); y += 30; });
-  if (propAddr) { setText(BRAND.cement); sans(doc, "normal"); doc.setFontSize(11); doc.text(propAddr, M, y); y += 18; }
-  y += 12;
-
-  // section title helper — green eyebrow (rule + caps label) + serif title, like the site
-  const sectionTitle = (num, title) => {
-    need(46); y += 10;
-    setFill(BRAND.accent); doc.rect(M, y - 4, 20, 2, "F"); // short accent rule
-    setText(BRAND.sage); sans(doc, "bold"); doc.setFontSize(8);
-    doc.text((num || "SECTION").toUpperCase(), M + 26, y);
-    y += 16;
-    setText(BRAND.darkGreen); serif(doc, "bold"); doc.setFontSize(17); doc.text(title, M, y);
-    y += 16;
-  };
   // Normalize AI punctuation: em/en dashes -> hyphen, smart quotes -> straight.
   const clean = (t) => String(t == null ? "" : t)
     .replace(/\s*[—–]\s*/g, " - ")
     .replace(/[‘’]/g, "'")
     .replace(/[“”]/g, '"')
     .replace(/…/g, "...");
-  const para = (text, color, size) => {
-    setText(color || BRAND.grey); doc.setFont("helvetica", "normal"); doc.setFontSize(size || 10.5);
-    const lines = doc.splitTextToSize(clean(text), CW);
-    lines.forEach((ln) => { need(16); doc.text(ln, M, y); y += 15; });
+
+  // ---- Solid header band ----
+  const HB = 80;
+  setFill(BRAND.darkGreen); doc.rect(0, 0, PW, HB, "F");
+  setFill(BRAND.accent); doc.rect(0, HB, PW, 2.5, "F"); // mint accent rule
+
+  // CBRE wordmark rendered as crisp text (the source logo image is low-res and
+  // pixelates when scaled; the wordmark is a bold sans caps, so text is sharper).
+  doc.setTextColor(255, 255, 255); sans(doc, "bold"); doc.setFontSize(26);
+  doc.text("CBRE", M, 42);
+  setText(BRAND.accent); sans(doc, "bold"); doc.setFontSize(7);
+  doc.text("EV INFRASTRUCTURE SOLUTIONS", M, 58);
+  doc.setTextColor(255, 255, 255); sans(doc, "normal"); doc.setFontSize(8.5);
+  doc.text("REA / OEA EV SITING ANALYSIS", PW - M, 38, { align: "right" });
+  const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+  doc.text(today, PW - M, 54, { align: "right" });
+
+  // ---- Title block (serif, like the site) ----
+  y = HB + 46;
+  setText(BRAND.darkGreen); serif(doc, "bold"); doc.setFontSize(24);
+  // Wrap on a slightly tighter width to avoid the embedded-font width rounding
+  // that was clipping long names.
+  const titleLines = doc.splitTextToSize(clean(propName || "Untitled Property"), CW - 4);
+  titleLines.forEach((ln) => { need(30); doc.text(ln, M, y); y += 28; });
+  if (propAddr) { setText(BRAND.cement); sans(doc, "normal"); doc.setFontSize(11); doc.text(clean(propAddr), M, y); y += 16; }
+  y += 16;
+
+  // section title helper — green eyebrow (rule + caps label) + serif title, like the site
+  const sectionTitle = (num, title) => {
+    need(54); y += 16;
+    setFill(BRAND.accent); doc.rect(M, y - 3.5, 20, 2, "F"); // short accent rule
+    setText(BRAND.sage); sans(doc, "bold"); doc.setFontSize(8);
+    doc.text((num || "SECTION").toUpperCase(), M + 28, y);
+    y += 17;
+    setText(BRAND.darkGreen); serif(doc, "bold"); doc.setFontSize(17);
+    const tl = doc.splitTextToSize(clean(title), CW); tl.forEach((l) => { doc.text(l, M, y); y += 20; });
+    y += 4;
+  };
+  // Normalize AI punctuation: em/en dashes -> hyphen, smart quotes -> straight.
+  const para = (text, color, size, indent) => {
+    const x = M + (indent || 0);
+    setText(color || BRAND.grey); doc.setFont("helvetica", "normal"); doc.setFontSize(size || 10);
+    const lines = doc.splitTextToSize(clean(text), CW - (indent || 0));
+    lines.forEach((ln) => { need(16); doc.text(ln, x, y); y += 15.5; });
   };
   const labelVal = (label, value) => {
+    need(20);
     setText(BRAND.darkGreen); doc.setFont("helvetica", "bold"); doc.setFontSize(10.5);
     const head = doc.splitTextToSize(clean(label), CW);
-    head.forEach((ln) => { need(15); doc.text(ln, M, y); y += 14; });
-    if (value) para(value, BRAND.grey, 10);
-    y += 4;
+    head.forEach((ln) => { need(15); doc.text(ln, M, y); y += 14.5; });
+    if (value) { y += 1; para(value, BRAND.grey, 10); }
+    y += 10;
   };
   const chip = (text, color, x, yy) => {
     doc.setFont("helvetica", "bold"); doc.setFontSize(8);

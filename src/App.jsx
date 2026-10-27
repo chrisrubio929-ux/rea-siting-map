@@ -44,6 +44,46 @@ function dataURLtoBlob(dataURL) {
 }
 const fileToBase64 = (file) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result.split(",")[1]); r.onerror = () => rej(new Error("read failed")); r.readAsDataURL(file); });
 
+// Draw the site plan with its colored zone boxes + labels onto a canvas and
+// return a PNG data URL. Used for the PDF so the map is included even when the
+// map step isn't currently on screen (e.g. downloading from the Save step).
+const ZONE_COLORS = { Best: "#003F2D", Conditional: "#E8A33D", "No-go": "#C0392B" };
+function renderMapOffscreen(src, zones) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const W = img.naturalWidth || 1200, H = img.naturalHeight || 800;
+        const canvas = document.createElement("canvas");
+        canvas.width = W; canvas.height = H;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, W, H);
+        (zones || []).forEach((z) => {
+          const col = ZONE_COLORS[z.viability] || "#E8A33D";
+          const x = z.x * W, y = z.y * H, w = z.w * W, h = z.h * H;
+          // fill
+          ctx.globalAlpha = 0.28; ctx.fillStyle = col; ctx.fillRect(x, y, w, h);
+          // border
+          ctx.globalAlpha = 1; ctx.strokeStyle = col; ctx.lineWidth = Math.max(2, W / 500); ctx.strokeRect(x, y, w, h);
+          // label
+          const fs = Math.max(11, W / 90);
+          ctx.font = `600 ${fs}px Inter, Arial, sans-serif`;
+          const label = z.label || "Zone";
+          const tw = ctx.measureText(label).width;
+          const ly = y - fs * 1.4 < 0 ? y + 2 : y - fs * 1.4;
+          ctx.fillStyle = col; ctx.fillRect(x, ly, tw + fs * 0.8, fs * 1.4);
+          ctx.fillStyle = "#fff"; ctx.textBaseline = "middle";
+          ctx.fillText(label, x + fs * 0.4, ly + fs * 0.75);
+        });
+        resolve(canvas.toDataURL("image/png"));
+      } catch (e) { reject(e); }
+    };
+    img.onerror = () => reject(new Error("could not load site plan image"));
+    img.src = src;
+  });
+}
+
 // Read an API response safely. If the server returned an HTML error page
 // (e.g. a function timeout or size limit), give a clear message instead of
 // a cryptic "Unexpected token '<'" JSON error.
@@ -278,10 +318,17 @@ export default function App() {
     if (!analysis) { setError("Run the analysis first."); return; }
     setError(""); setDownloading(true);
     try {
-      // Snapshot the map (with zone boxes) if the user has reached/completed the map step.
+      // Get the marked-up map image. Prefer a live capture of the on-screen stage
+      // (works on the Map step); otherwise build one offscreen from the plan + zones
+      // so the site plan is included no matter which step you download from.
       let mapImage = null;
-      if (imgSrc && stageRef.current) {
-        try { mapImage = await captureElement(stageRef.current); } catch (e) { mapImage = imgSrc; }
+      if (imgSrc) {
+        if (stageRef.current) {
+          try { mapImage = await captureElement(stageRef.current); } catch (e) { mapImage = null; }
+        }
+        if (!mapImage) {
+          try { mapImage = await renderMapOffscreen(imgSrc, zones); } catch (e) { mapImage = null; }
+        }
       }
       await generateReportPdf({ analysis, propName: propName.trim() || "REA Analysis", propAddr: propAddr.trim(), mapImage, zones });
     } catch (e) { setError("Couldn't build the PDF: " + (e.message || e)); }
@@ -574,7 +621,7 @@ export default function App() {
           <div style={{ color: "#fff", opacity: 0.6, fontSize: 11, marginTop: 6 }}>
             © {new Date().getFullYear()} CBRE, Inc. All Rights Reserved. Confidential &amp; Proprietary.
           </div>
-          <div style={{ color: "#fff", opacity: 0.3, fontSize: 10, marginTop: 10 }}>build v25-brandpdf</div>
+          <div style={{ color: "#fff", opacity: 0.3, fontSize: 10, marginTop: 10 }}>build v26-pdffix</div>
         </div>
       </div>
     </div>
