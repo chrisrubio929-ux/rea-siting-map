@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { supabaseReady, supabaseUrl, supabaseAnonKey, saveProperty, listProperties, loadProperty, createJob, pollJob, uploadReaDoc } from "./supabaseClient";
+import { generateReportPdf, captureElement } from "./reportPdf";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
@@ -94,6 +95,7 @@ export default function App() {
   const [pdfPages, setPdfPages] = useState(null);
   const [drafting, setDrafting] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   const reaRef = useRef();
   const planRef = useRef();
@@ -245,6 +247,20 @@ export default function App() {
     finally { setSaving(false); }
   };
 
+  const downloadReport = async () => {
+    if (!analysis) { setError("Run the analysis first."); return; }
+    setError(""); setDownloading(true);
+    try {
+      // Snapshot the map (with zone boxes) if the user has reached/completed the map step.
+      let mapImage = null;
+      if (imgSrc && stageRef.current) {
+        try { mapImage = await captureElement(stageRef.current); } catch (e) { mapImage = imgSrc; }
+      }
+      await generateReportPdf({ analysis, propName: propName.trim() || "REA Analysis", propAddr: propAddr.trim(), mapImage, zones });
+    } catch (e) { setError("Couldn't build the PDF: " + (e.message || e)); }
+    finally { setDownloading(false); }
+  };
+
   const openProperty = async (p) => {
     setError(""); setNotice("");
     try {
@@ -342,6 +358,7 @@ export default function App() {
                 {analyzing ? "Analyzing…" : analysis ? "Re-run analysis" : "Analyze documents"}
               </button>
               {analysis && !analyzing && <button onClick={() => setStep(1)} style={{ marginTop: 14, marginLeft: 10, background: "#fff", color: C.green, border: `1px solid ${C.green}`, padding: "12px 22px", borderRadius: 4, fontWeight: 600, fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>Next: map the site plan →</button>}
+              {analysis && !analyzing && <button onClick={downloadReport} disabled={downloading} style={{ marginTop: 14, marginLeft: 10, background: "transparent", color: C.sage, border: `1px solid ${C.sage}`, padding: "12px 22px", borderRadius: 4, fontWeight: 600, fontSize: 14, cursor: downloading ? "default" : "pointer", fontFamily: "inherit" }}>{downloading ? "Building PDF…" : "⬇ Download report"}</button>}
               {analyzing && <div style={{ marginTop: 12, fontSize: 13, color: C.sage }}>
                 <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: C.accent, marginRight: 8, animation: "pulse 1.2s ease-in-out infinite" }} />
                 {progress || "Starting…"} You can leave this running.
@@ -453,6 +470,7 @@ export default function App() {
               <Field label="Property name"><input value={propName} onChange={(e) => setPropName(e.target.value)} placeholder="e.g. The Sunset Esplanade" style={inp} /></Field>
               <Field label="Address (optional)"><input value={propAddr} onChange={(e) => setPropAddr(e.target.value)} placeholder="City, State" style={inp} /></Field>
               <button onClick={doSave} disabled={saving || !supabaseReady} style={{ width: "100%", marginTop: 8, background: supabaseReady ? C.green : C.celadonTint, color: "#fff", border: "none", padding: "12px", borderRadius: 4, fontWeight: 600, fontSize: 15, cursor: supabaseReady && !saving ? "pointer" : "not-allowed", fontFamily: "inherit" }}>{saving ? "Saving…" : "💾 Save to property library"}</button>
+              <button onClick={downloadReport} disabled={downloading || !analysis} style={{ width: "100%", marginTop: 10, background: "#fff", color: C.green, border: `1px solid ${C.green}`, padding: "11px", borderRadius: 4, fontWeight: 600, fontSize: 14, cursor: analysis && !downloading ? "pointer" : "not-allowed", fontFamily: "inherit", opacity: analysis ? 1 : 0.5 }}>{downloading ? "Building PDF…" : "⬇ Download full report (PDF)"}</button>
               {notice && <button onClick={resetAll} style={{ width: "100%", marginTop: 10, background: "transparent", color: C.green, border: `1px solid ${C.green}`, padding: "11px", borderRadius: 4, fontWeight: 600, fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>Start a new property</button>}
             </div>
           </div>
@@ -461,7 +479,7 @@ export default function App() {
 
       <div style={{ textAlign: "center", padding: 20, color: C.cement, fontSize: 11 }}>
         Created by Chris Rubio · Preliminary analysis only — not legal advice. Confirm all findings against the executed REA with counsel.
-        <div style={{ marginTop: 6, opacity: 0.5 }}>build v14-storage</div>
+        <div style={{ marginTop: 6, opacity: 0.5 }}>build v15-pdf</div>
       </div>
     </div>
   );
