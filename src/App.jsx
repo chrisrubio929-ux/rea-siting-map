@@ -213,7 +213,7 @@ export default function App() {
     if (!imgSrc) return;
     setError(""); setDrafting(true);
     try {
-      const resp = await fetch("/api/draft-zones", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageBase64: imgSrc.split(",")[1], mediaType: imgType, analysis }) });
+      const resp = await fetch("/.netlify/functions/draft-zones", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageBase64: imgSrc.split(",")[1], mediaType: imgType, analysis }) });
       const data = await readApiJson(resp);
       const parsed = extractJson(data);
       const drafted = (parsed.zones || []).map((z) => ({
@@ -560,7 +560,7 @@ export default function App() {
           <div style={{ color: "#fff", opacity: 0.6, fontSize: 11, marginTop: 6 }}>
             © {new Date().getFullYear()} CBRE, Inc. All Rights Reserved. Confidential &amp; Proprietary.
           </div>
-          <div style={{ color: "#fff", opacity: 0.3, fontSize: 10, marginTop: 10 }}>build v21-bigdoc</div>
+          <div style={{ color: "#fff", opacity: 0.3, fontSize: 10, marginTop: 10 }}>build v22-draftpath</div>
         </div>
       </div>
     </div>

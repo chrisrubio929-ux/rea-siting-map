@@ -73,4 +73,5 @@ function json(obj, status) {
   });
 }
 
-export const config = { path: "/api/draft-zones" };
+// Called at the canonical /.netlify/functions/draft-zones path (no custom /api
+// alias, which can be intercepted by Netlify redirect/password-protection layers).
