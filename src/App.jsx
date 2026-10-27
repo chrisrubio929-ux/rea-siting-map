@@ -13,6 +13,7 @@ const C = {
   midnight: "#032842", sage: "#538184", celadon: "#80BBAD", wheat: "#DBD99A",
   cement: "#7F8480", wheatTint: "#EFECD2", celadonTint: "#C0D4CB",
   orange: "#D2785A", amber: "#E8A33D", red: "#C0392B", paper: "#FAFAF7", white: "#FFFFFF",
+  ink: "#1A1F1D", inkSoft: "#232A27", lightGrey: "#F3F4F2", sageGrey: "#C7CFC9",
 };
 
 const VIABILITY = {
@@ -288,36 +289,56 @@ export default function App() {
         @keyframes pulse { 0%,100%{opacity:1;transform:scale(1);} 50%{opacity:0.35;transform:scale(0.7);} }
       `}</style>
 
-      <div style={{
-        position: "relative",
-        backgroundImage: `linear-gradient(90deg, ${hexA(C.darkGreen, 0.92)} 0%, ${hexA(C.darkGreen, 0.72)} 45%, ${hexA(C.darkGreen, 0.35)} 100%), url(${BANNER})`,
-        backgroundSize: "cover", backgroundPosition: "center right",
-        padding: "22px 24px 0", borderBottom: `3px solid ${C.accent}`,
-      }}>
-        <div style={{ maxWidth: 1280, margin: "0 auto" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28 }}>
-            <img src={CBRE_LOGO} alt="CBRE" style={{ height: 32 }} />
-            <div style={{ color: C.white, fontSize: 11, letterSpacing: 2, textShadow: "0 1px 4px rgba(0,0,0,.5)" }}>EV INFRASTRUCTURE SOLUTIONS</div>
-          </div>
-          <div style={{ color: C.accent, fontSize: 12, letterSpacing: 3, marginBottom: 12 }}>REA ANALYSIS &amp; SITE MAP</div>
-          <h1 className="fin" style={{ color: C.white, fontSize: 38, margin: 0, fontWeight: 500, textShadow: "0 2px 8px rgba(0,0,0,.4)" }}>EV Siting Workbench</h1>
-          <p style={{ color: C.white, margin: "10px 0 24px", fontSize: 16, maxWidth: 620, textShadow: "0 1px 6px rgba(0,0,0,.5)" }}>
-            Analyze the REA, map the charging zones onto the site plan, and save the property, all in one flow.
-          </p>
-          <div style={{ display: "flex", gap: 4 }}>
+      {/* ---- Dark navbar ---- */}
+      <div style={{ background: C.ink, padding: "0 24px" }}>
+        <div style={{ maxWidth: 1280, margin: "0 auto", height: 68, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <img src={CBRE_LOGO} alt="CBRE" style={{ height: 26 }} />
+          <div style={{ display: "flex", gap: 26, alignItems: "center" }}>
             {STEPS.map((s, i) => (
               <button key={s} onClick={() => setStep(i)}
-                style={{ background: "transparent", border: "none", cursor: "pointer", padding: "10px 20px 14px", fontFamily: "inherit",
-                  color: step === i ? C.white : C.celadon, fontWeight: step === i ? 700 : 400, fontSize: 14,
-                  borderBottom: step === i ? `3px solid ${C.accent}` : "3px solid transparent", marginBottom: -3 }}>
-                {i + 1}. {s}
+                style={{ background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit",
+                  color: step === i ? C.white : "rgba(255,255,255,.62)", fontWeight: step === i ? 700 : 500,
+                  fontSize: 12.5, letterSpacing: 1, textTransform: "uppercase", padding: "6px 0" }}>
+                {s}
               </button>
             ))}
           </div>
         </div>
       </div>
 
-      <div style={{ maxWidth: 1280, margin: "0 auto", padding: "28px 24px" }}>
+      {/* ---- Photo hero ---- */}
+      <div style={{
+        position: "relative",
+        backgroundImage: `linear-gradient(90deg, ${hexA(C.ink, 0.94)} 0%, ${hexA(C.ink, 0.74)} 48%, ${hexA(C.ink, 0.34)} 100%), url(${BANNER})`,
+        backgroundSize: "cover", backgroundPosition: "center right",
+        padding: "56px 24px 54px", borderBottom: `3px solid ${C.accent}`,
+      }}>
+        <div style={{ maxWidth: 1280, margin: "0 auto" }}>
+          <Eyebrow onDark>REA ANALYSIS &amp; SITE MAP</Eyebrow>
+          <h1 className="fin" style={{ color: C.white, fontSize: 52, margin: 0, fontWeight: 500, textShadow: "0 2px 10px rgba(0,0,0,.4)", lineHeight: 1.05, maxWidth: 740 }}>EV Siting Workbench</h1>
+          <p style={{ color: "rgba(255,255,255,.9)", margin: "18px 0 0", fontSize: 17, maxWidth: 580, textShadow: "0 1px 6px rgba(0,0,0,.5)", lineHeight: 1.6 }}>
+            Analyze the REA, map the charging zones onto the site plan, and save the property, all in one flow.
+          </p>
+        </div>
+      </div>
+
+      {/* ---- Progress stepper ---- */}
+      <div style={{ background: "#fff", borderBottom: `1px solid ${C.celadonTint}`, padding: "0 24px" }}>
+        <div style={{ maxWidth: 1280, margin: "0 auto", display: "flex", gap: 0 }}>
+          {STEPS.map((s, i) => (
+            <button key={s} onClick={() => setStep(i)}
+              style={{ flex: "0 0 auto", background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit",
+                display: "flex", alignItems: "center", gap: 9, padding: "16px 26px 14px",
+                borderBottom: step === i ? `3px solid ${C.accent}` : "3px solid transparent", marginBottom: -1 }}>
+              <span style={{ width: 22, height: 22, borderRadius: "50%", fontSize: 11.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center",
+                background: step === i ? C.green : step > i ? C.accent : C.celadonTint, color: step >= i ? "#fff" : C.cement }}>{step > i ? "✓" : i + 1}</span>
+              <span style={{ fontSize: 13.5, fontWeight: step === i ? 700 : 500, color: step === i ? C.darkGreen : C.cement }}>{s}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ maxWidth: 1280, margin: "0 auto", padding: "36px 24px" }}>
         {!supabaseReady && (
           <div style={{ marginBottom: 20, padding: 14, background: C.wheatTint, border: `1px solid ${C.wheat}`, borderRadius: 4, fontSize: 14, color: C.darkGrey }}>
             <strong>Running without a database.</strong> Analysis and mapping work; Save needs your Supabase keys (see README).
@@ -328,7 +349,7 @@ export default function App() {
 
         {supabaseReady && library.length > 0 && onLibrary && step === 0 && (
           <div style={{ marginBottom: 28 }}>
-            <div className="fin" style={{ fontSize: 20, color: C.green, marginBottom: 12 }}>Property library</div>
+            <SectionHead eyebrow="SAVED PROPERTIES" title="Property Library" />
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 }}>
               {library.map((p) => (
                 <div key={p.id} onClick={() => openProperty(p)} style={{ background: "#fff", border: `1px solid ${C.celadonTint}`, borderRadius: 6, overflow: "hidden", cursor: "pointer" }}>
@@ -349,7 +370,7 @@ export default function App() {
         {step === 0 && (
           <div className="layout" style={{ display: "grid", gridTemplateColumns: analysis ? "380px 1fr" : "1fr", gap: 24, alignItems: "start" }}>
             <div>
-              <div className="fin" style={{ fontSize: 22, color: C.green, marginBottom: 12 }}>Step 1: Analyze the REA / OEA</div>
+              <SectionHead eyebrow="STEP 1 · DOCUMENT ANALYSIS" title="Analyze the REA / OEA" />
               <MultiUpload label="REA / OEA document(s)" hint="PDF · base agreement plus any amendments" files={reaFiles} inputRef={reaRef}
                 onAdd={(fs) => setReaFiles((p) => [...p, ...fs])} onRemove={(i) => setReaFiles((p) => p.filter((_, x) => x !== i))} />
               <label style={{ display: "block", marginTop: 16, fontWeight: 600, fontSize: 13, color: C.darkGrey }}>Property context (optional)</label>
@@ -373,8 +394,9 @@ export default function App() {
 
         {step === 1 && (
           <div>
-            <div className="fin" style={{ fontSize: 22, color: C.green, marginBottom: 6 }}>Step 2: Map the site plan</div>
-            {analysis && <div style={{ fontSize: 13, color: C.sage, marginBottom: 16 }}>✓ Zones will be drafted using your REA analysis (real parties &amp; approvals).</div>}
+            <SectionHead eyebrow="STEP 2 · SITE PLAN MAPPING" title="Map the Site Plan"
+              subtitle={analysis ? "Zones will be drafted using your REA analysis (real parties and approvals)." : undefined} />
+
             {pdfPages ? (
               <div>
                 <div style={{ fontSize: 14, color: C.cement, marginBottom: 14 }}>Click the page that shows the site plan (e.g. the Exhibit page).</div>
@@ -465,7 +487,7 @@ export default function App() {
 
         {step === 2 && (
           <div style={{ maxWidth: 560 }}>
-            <div className="fin" style={{ fontSize: 22, color: C.green, marginBottom: 14 }}>Step 3: Save the property</div>
+            <SectionHead eyebrow="STEP 3 · SAVE & EXPORT" title="Save the Property" />
             <div style={{ background: "#fff", border: `1px solid ${C.celadonTint}`, borderRadius: 6, padding: 20 }}>
               <div style={{ fontSize: 14, color: C.darkGrey, marginBottom: 16 }}>
                 Saving includes: {analysis ? "the written analysis" : "no analysis"}{imgSrc ? ", the site-plan map" : ""}{zones.length ? `, and ${zones.length} zone(s)` : ""}.
@@ -524,7 +546,7 @@ export default function App() {
           <div style={{ color: "#fff", opacity: 0.6, fontSize: 11, marginTop: 6 }}>
             © {new Date().getFullYear()} CBRE, Inc. All Rights Reserved. Confidential &amp; Proprietary.
           </div>
-          <div style={{ color: "#fff", opacity: 0.3, fontSize: 10, marginTop: 10 }}>build v17-ceros</div>
+          <div style={{ color: "#fff", opacity: 0.3, fontSize: 10, marginTop: 10 }}>build v18-enterprise</div>
         </div>
       </div>
     </div>
@@ -534,6 +556,25 @@ export default function App() {
 const inp = { width: "100%", padding: "8px 10px", borderRadius: 4, border: `1px solid ${C.celadonTint}`, fontFamily: "inherit", fontSize: 13, marginTop: 4 };
 function Field({ label, children }) { return <div style={{ marginBottom: 12 }}><label style={{ fontSize: 12, fontWeight: 600, color: C.darkGrey }}>{label}</label>{children}</div>; }
 function hexA(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`; }
+
+// Enterprise design primitives (styled after the CBRE EV site)
+function Eyebrow({ children, onDark }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+      <span style={{ width: 26, height: 2, background: C.accent }} />
+      <span style={{ color: onDark ? C.accent : C.sage, fontSize: 11.5, letterSpacing: 2, fontWeight: 700 }}>{children}</span>
+    </div>
+  );
+}
+function SectionHead({ eyebrow, title, subtitle, onDark }) {
+  return (
+    <div style={{ marginBottom: 24 }}>
+      {eyebrow && <Eyebrow onDark={onDark}>{eyebrow}</Eyebrow>}
+      <h2 className="fin" style={{ fontSize: 30, margin: 0, fontWeight: 500, color: onDark ? C.white : C.darkGreen, lineHeight: 1.1 }}>{title}</h2>
+      {subtitle && <p style={{ fontSize: 15, color: onDark ? C.sageGrey : C.darkGrey, margin: "12px 0 0", maxWidth: 680, lineHeight: 1.6 }}>{subtitle}</p>}
+    </div>
+  );
+}
 
 function MultiUpload({ label, hint, files, inputRef, onAdd, onRemove }) {
   const has = files.length > 0;
@@ -561,17 +602,18 @@ function MultiUpload({ label, hint, files, inputRef, onAdd, onRemove }) {
 
 function Section({ title, num, children }) {
   return (
-    <div style={{ marginTop: 20 }}>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 10, borderBottom: `2px solid ${C.green}`, paddingBottom: 6, marginBottom: 12 }}>
-        <span style={{ color: C.sage, fontSize: 12 }}>{num}</span>
-        <h2 className="fin" style={{ fontSize: 20, color: C.green, margin: 0, fontWeight: 400 }}>{title}</h2>
+    <div style={{ marginTop: 32 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+        <span style={{ width: 22, height: 2, background: C.accent }} />
+        <span style={{ color: C.sage, fontSize: 11, letterSpacing: 1.5, fontWeight: 700 }}>{num}</span>
       </div>
+      <h2 className="fin" style={{ fontSize: 24, color: C.darkGreen, margin: "0 0 14px", fontWeight: 500 }}>{title}</h2>
       {children}
     </div>
   );
 }
-function Pill({ text, color }) { return <span style={{ background: color, color: "#fff", fontSize: 11, fontWeight: 600, padding: "2px 9px", borderRadius: 20, whiteSpace: "nowrap" }}>{text}</span>; }
-function Card({ children }) { return <div style={{ background: "#fff", border: `1px solid ${C.celadonTint}`, borderRadius: 4, padding: 14, marginBottom: 10 }}>{children}</div>; }
+function Pill({ text, color }) { return <span style={{ background: color, color: "#fff", fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 20, whiteSpace: "nowrap" }}>{text}</span>; }
+function Card({ children }) { return <div style={{ background: "#fff", border: `1px solid ${C.celadonTint}`, borderRadius: 8, padding: 16, marginBottom: 10, boxShadow: "0 1px 6px rgba(1,42,45,.04)" }}>{children}</div>; }
 const vColor = (v) => (v === "Yes" ? C.green : v === "Conditional" ? C.amber : C.red);
 const dColor = (d) => (d === "Low" ? C.sage : d === "Medium" ? C.amber : C.red);
 const rColor = (t) => (t === "Permitted" ? C.green : t === "Silent" ? C.cement : t === "Restricted" ? C.amber : C.red);
@@ -579,7 +621,7 @@ const rColor = (t) => (t === "Permitted" ? C.green : t === "Silent" ? C.cement :
 function AnalysisReport({ data }) {
   return (
     <div>
-      <Section title="Property Summary" num="01">
+      <Section title="Property Summary" num="OVERVIEW">
         <p style={{ fontSize: 15, lineHeight: 1.6, color: C.darkGrey }}>{data.propertySummary}</p>
         {data.documentsReviewed?.length > 0 && (
           <div style={{ marginTop: 10, padding: 12, background: C.celadonTint + "33", borderRadius: 4, borderLeft: `3px solid ${C.sage}` }}>
@@ -588,11 +630,11 @@ function AnalysisReport({ data }) {
           </div>
         )}
       </Section>
-      {data.parties?.length > 0 && <Section title="Controlling Parties" num="02">{data.parties.map((p, i) => <Card key={i}><div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}><strong style={{ color: C.green, fontSize: 14 }}>{p.name}</strong><Pill text={p.role} color={C.sage} /></div><div style={{ fontSize: 13, color: C.darkGrey, marginTop: 6 }}>{p.controlsAreas}</div></Card>)}</Section>}
-      {data.controlZones?.length > 0 && <Section title="Control Zones & EV Viability" num="03">{data.controlZones.map((z, i) => <Card key={i}><div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}><strong style={{ color: C.midnight, fontSize: 14 }}>{z.zone}</strong><Pill text={"EV: " + z.evViable} color={vColor(z.evViable)} /></div><div style={{ fontSize: 12, color: C.cement, marginTop: 4 }}>Controlled by: {z.controllingParty}</div><div style={{ fontSize: 13, color: C.darkGrey, marginTop: 6 }}>{z.rationale}</div>{z.constraints && <div style={{ fontSize: 12, color: C.orange, marginTop: 6 }}>⚠ {z.constraints}</div>}</Card>)}</Section>}
-      {data.approvalMatrix?.length > 0 && <Section title="Approval Matrix" num="04">{data.approvalMatrix.map((a, i) => <Card key={i}><div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}><strong style={{ color: C.green, fontSize: 14 }}>{a.action}</strong><Pill text={a.difficulty + " effort"} color={dColor(a.difficulty)} /></div><div style={{ fontSize: 13, color: C.darkGrey, marginTop: 6 }}><strong>Approval required:</strong> {a.approvalRequired}</div><div style={{ fontSize: 12, color: C.cement, marginTop: 4 }}>Basis: {a.basis}</div></Card>)}</Section>}
-      {data.evRestrictions?.length > 0 && <Section title="EV-Relevant REA Language" num="05">{data.evRestrictions.map((r, i) => <Card key={i}><div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}><Pill text={r.type} color={rColor(r.type)} /><strong style={{ color: C.darkGreen, fontSize: 13 }}>{r.topic}</strong></div><div style={{ fontSize: 13, color: C.darkGrey, marginTop: 6 }}>{r.detail}</div></Card>)}</Section>}
-      {data.recommendedZones?.length > 0 && <Section title="Recommended Zones" num="06"><div style={{ background: C.green, borderRadius: 4, padding: 16 }}>{data.recommendedZones.map((z, i) => <div key={i} style={{ display: "flex", gap: 12, padding: "7px 0", borderBottom: i < data.recommendedZones.length - 1 ? `1px solid ${C.sage}` : "none" }}><span style={{ color: C.accent, fontWeight: 700 }}>{String(i + 1).padStart(2, "0")}</span><span style={{ color: "#fff", fontSize: 13, lineHeight: 1.5 }}>{z}</span></div>)}</div></Section>}
+      {data.parties?.length > 0 && <Section title="Controlling Parties" num="OWNERSHIP">{data.parties.map((p, i) => <Card key={i}><div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}><strong style={{ color: C.green, fontSize: 14 }}>{p.name}</strong><Pill text={p.role} color={C.sage} /></div><div style={{ fontSize: 13, color: C.darkGrey, marginTop: 6 }}>{p.controlsAreas}</div></Card>)}</Section>}
+      {data.controlZones?.length > 0 && <Section title="Control Zones & EV Viability" num="SITING">{data.controlZones.map((z, i) => <Card key={i}><div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}><strong style={{ color: C.midnight, fontSize: 14 }}>{z.zone}</strong><Pill text={"EV: " + z.evViable} color={vColor(z.evViable)} /></div><div style={{ fontSize: 12, color: C.cement, marginTop: 4 }}>Controlled by: {z.controllingParty}</div><div style={{ fontSize: 13, color: C.darkGrey, marginTop: 6 }}>{z.rationale}</div>{z.constraints && <div style={{ fontSize: 12, color: C.orange, marginTop: 6 }}>⚠ {z.constraints}</div>}</Card>)}</Section>}
+      {data.approvalMatrix?.length > 0 && <Section title="Approval Matrix" num="APPROVALS">{data.approvalMatrix.map((a, i) => <Card key={i}><div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}><strong style={{ color: C.green, fontSize: 14 }}>{a.action}</strong><Pill text={a.difficulty + " effort"} color={dColor(a.difficulty)} /></div><div style={{ fontSize: 13, color: C.darkGrey, marginTop: 6 }}><strong>Approval required:</strong> {a.approvalRequired}</div><div style={{ fontSize: 12, color: C.cement, marginTop: 4 }}>Basis: {a.basis}</div></Card>)}</Section>}
+      {data.evRestrictions?.length > 0 && <Section title="EV-Relevant REA Language" num="RESTRICTIONS">{data.evRestrictions.map((r, i) => <Card key={i}><div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}><Pill text={r.type} color={rColor(r.type)} /><strong style={{ color: C.darkGreen, fontSize: 13 }}>{r.topic}</strong></div><div style={{ fontSize: 13, color: C.darkGrey, marginTop: 6 }}>{r.detail}</div></Card>)}</Section>}
+      {data.recommendedZones?.length > 0 && <Section title="Recommended Zones" num="RECOMMENDATIONS"><div style={{ background: C.ink, borderRadius: 10, padding: 22 }}>{data.recommendedZones.map((z, i) => <div key={i} style={{ display: "flex", gap: 14, padding: "10px 0", borderBottom: i < data.recommendedZones.length - 1 ? `1px solid ${hexA(C.sage, 0.3)}` : "none" }}><span className="fin" style={{ color: C.accent, fontWeight: 700, fontSize: 18, flexShrink: 0, lineHeight: 1.3 }}>{String(i + 1).padStart(2, "0")}</span><span style={{ color: "rgba(255,255,255,.92)", fontSize: 14, lineHeight: 1.55 }}>{z}</span></div>)}</div></Section>}
       <div className="layout" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 20 }}>
         {data.risks?.length > 0 && <div><h3 className="fin" style={{ color: C.red, fontSize: 16, fontWeight: 400, margin: "0 0 8px" }}>Risks & Unknowns</h3>{data.risks.map((r, i) => <div key={i} style={{ fontSize: 13, color: C.darkGrey, padding: "5px 0", borderBottom: `1px solid ${C.celadonTint}` }}>• {r}</div>)}</div>}
         {data.nextSteps?.length > 0 && <div><h3 className="fin" style={{ color: C.green, fontSize: 16, fontWeight: 400, margin: "0 0 8px" }}>Next Steps</h3>{data.nextSteps.map((s, i) => <div key={i} style={{ fontSize: 13, color: C.darkGrey, padding: "5px 0", borderBottom: `1px solid ${C.celadonTint}` }}>{i + 1}. {s}</div>)}</div>}
