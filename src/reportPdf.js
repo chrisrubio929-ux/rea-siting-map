@@ -103,11 +103,17 @@ export async function generateReportPdf({ analysis, propName, propAddr, mapImage
   y += 10; setFill(BRAND.hair); doc.rect(M, y, CW, 0.8, "F"); y += 6;
 
   // section title helper — accent rule + caps eyebrow + bold sans title
+  // Every section starts at the top of a page (except the first, which follows
+  // the title block on page 1), so a reader can always tell which section a
+  // page belongs to by glancing at its top.
+  let firstSection = true;
   const sectionTitle = (num, title) => {
-    // Keep the heading with at least the first chunk of its content: if there
-    // isn't room for the eyebrow + title + ~3 lines, start a fresh page.
-    if (y + 110 > PH - M) { doc.addPage(); y = M; }
-    y += 26;
+    if (firstSection) {
+      firstSection = false;
+      y += 26;
+    } else {
+      doc.addPage(); y = M + 8;
+    }
     setText(BRAND.sage); sans(doc, "bold"); doc.setFontSize(7.5);
     setFill(BRAND.accent); doc.rect(M, y - 3, 18, 2, "F");
     spaced((num || "SECTION").toUpperCase(), M + 26, y, 0.9);
@@ -145,8 +151,7 @@ export async function generateReportPdf({ analysis, propName, propAddr, mapImage
   // Control Zones discussion (its natural context). Defined here, called below.
   const renderSitePlan = () => {
     if (!mapImage) return;
-    // start the visual on a fresh page if there isn't room for a meaningful chunk
-    if (y > PH - M - 260) { doc.addPage(); y = M; }
+    // sectionTitle already starts this on a fresh page (one section per page start)
     sectionTitle("SITE PLAN", "Marked-Up Site Plan");
     try {
       const props = doc.getImageProperties(mapImage);
