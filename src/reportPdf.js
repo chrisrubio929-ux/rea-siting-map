@@ -104,14 +104,17 @@ export async function generateReportPdf({ analysis, propName, propAddr, mapImage
 
   // section title helper — accent rule + caps eyebrow + bold sans title
   const sectionTitle = (num, title) => {
-    need(50); y += 22;
+    // Keep the heading with at least the first chunk of its content: if there
+    // isn't room for the eyebrow + title + ~3 lines, start a fresh page.
+    if (y + 110 > PH - M) { doc.addPage(); y = M; }
+    y += 26;
     setText(BRAND.sage); sans(doc, "bold"); doc.setFontSize(7.5);
     setFill(BRAND.accent); doc.rect(M, y - 3, 18, 2, "F");
     spaced((num || "SECTION").toUpperCase(), M + 26, y, 0.9);
-    y += 16;
+    y += 17;
     setText(BRAND.ink); head(doc); doc.setFontSize(16);
     const tl = doc.splitTextToSize(clean(title), CW); tl.forEach((l) => { doc.text(l, M, y); y += 19; });
-    y += 6;
+    y += 8;
   };
   // Normalize AI punctuation: em/en dashes -> hyphen, smart quotes -> straight.
   const para = (text, color, size, indent) => {
@@ -136,54 +139,54 @@ export async function generateReportPdf({ analysis, propName, propAddr, mapImage
     return w;
   };
 
-  // ---- Site plan snapshot (if present) ----
-  if (mapImage) {
-    sectionTitle("SITE PLAN", "Potential EV Charging Zones");
+  const a = analysis || {};
+
+  // The marked-up site plan renders as its own section, placed right after the
+  // Control Zones discussion (its natural context). Defined here, called below.
+  const renderSitePlan = () => {
+    if (!mapImage) return;
+    // start the visual on a fresh page if there isn't room for a meaningful chunk
+    if (y > PH - M - 260) { doc.addPage(); y = M; }
+    sectionTitle("SITE PLAN", "Marked-Up Site Plan");
     try {
       const props = doc.getImageProperties(mapImage);
-      const imgW = CW;
-      const imgH = (props.height / props.width) * imgW;
-      const drawH = Math.min(imgH, PH - M - y - 40);
-      const drawW = (props.width / props.height) * drawH;
-      need(drawH + 24);
-      doc.addImage(mapImage, "PNG", M, y, drawW > CW ? CW : drawW, drawW > CW ? (props.height / props.width) * CW : drawH);
-      y += (drawW > CW ? (props.height / props.width) * CW : drawH) + 12;
+      const drawW = CW;
+      const drawH = (props.height / props.width) * drawW;
+      const capped = Math.min(drawH, PH - M - y - 60);
+      const finalW = capped < drawH ? (props.width / props.height) * capped : drawW;
+      const finalH = capped < drawH ? capped : drawH;
+      doc.addImage(mapImage, "PNG", M, y, finalW, finalH);
+      // thin frame
+      setFill(BRAND.hair); doc.rect(M, y + finalH, finalW, 0.6, "F");
+      y += finalH + 14;
     } catch (e) { para("(Site plan image could not be embedded.)", BRAND.cement, 9); }
-
     // color key
-    need(20);
+    need(22);
     let kx = M;
     kx += chip("Best", BRAND.green, kx, y) + 8;
     kx += chip("Conditional", BRAND.amber, kx, y) + 8;
     kx += chip("No-go", BRAND.red, kx, y) + 8;
-    y += 18;
-
+    y += 20;
     if (zones && zones.length) {
-      y += 6;
-      setText(BRAND.darkGreen); doc.setFont("helvetica", "bold"); doc.setFontSize(9); need(14);
-      doc.text("ZONE DETAIL", M, y); y += 14;
+      setText(BRAND.sage); sans(doc, "bold"); doc.setFontSize(7.5); need(14); spaced("ZONE DETAIL", M, y, 0.9); y += 15;
       zones.forEach((z) => {
-        need(22);
+        need(26);
         const v = z.viability === "Best" ? BRAND.green : z.viability === "Conditional" ? BRAND.amber : BRAND.red;
         setFill(v); doc.circle(M + 4, y - 3, 3.2, "F");
-        setText(BRAND.darkGreen); doc.setFont("helvetica", "bold"); doc.setFontSize(10.5);
+        setText(BRAND.ink); head(doc); doc.setFontSize(10.5);
         const labelLines = doc.splitTextToSize(clean(z.label || "Zone") + "  (" + (z.viability || "") + ")", CW - 16);
-        labelLines.forEach((l, i) => { need(14); doc.text(l, M + 14, y); y += 13; });
-        setText(BRAND.grey); doc.setFont("helvetica", "normal"); doc.setFontSize(9.5);
+        labelLines.forEach((l) => { need(14); doc.text(l, M + 14, y); y += 13; });
+        setText(BRAND.grey); sans(doc, "normal"); doc.setFontSize(9.5);
         if (z.controllingParty) { const ln = doc.splitTextToSize("Controlled by: " + clean(z.controllingParty), CW - 16); ln.forEach((l) => { need(12); doc.text(l, M + 14, y); y += 12; }); }
         if (z.approval) { const ln = doc.splitTextToSize("Approval: " + clean(z.approval), CW - 16); ln.forEach((l) => { need(12); doc.text(l, M + 14, y); y += 12; }); }
-        y += 8;
+        y += 9;
       });
-    } else {
-      para("No zones were drafted on the site plan. Add zones on the Map step to include them here.", BRAND.cement, 9.5);
     }
-  }
-
-  const a = analysis || {};
+  };
 
   // 01 Property Summary
   if (a.propertySummary) { sectionTitle("OVERVIEW", "Property Summary"); para(a.propertySummary);
-    if (a.documentsReviewed?.length) { y += 4; setText(BRAND.darkGreen); doc.setFont("helvetica", "bold"); doc.setFontSize(9); need(14); doc.text("DOCUMENTS REVIEWED", M, y); y += 13; a.documentsReviewed.forEach((d) => para("• " + d, BRAND.grey, 10)); }
+    if (a.documentsReviewed?.length) { y += 6; setText(BRAND.sage); sans(doc, "bold"); doc.setFontSize(7.5); need(14); spaced("DOCUMENTS REVIEWED", M, y, 0.9); y += 14; a.documentsReviewed.forEach((d) => para("• " + d, BRAND.grey, 10)); }
   }
   // 02 Parties
   if (a.parties?.length) { sectionTitle("OWNERSHIP", "Controlling Parties"); a.parties.forEach((p) => { labelVal(`${p.name}  |  ${p.role || ""}`, p.controlsAreas); }); }
@@ -199,6 +202,10 @@ export async function generateReportPdf({ analysis, propName, propAddr, mapImage
     if (z.constraints) para("Constraint: " + z.constraints, BRAND.orange, 9.5);
     y += 10;
   }); }
+
+  // Site plan visual — right after the zones discussion it illustrates.
+  renderSitePlan();
+
   // 04 Approval Matrix
   if (a.approvalMatrix?.length) { sectionTitle("APPROVALS", "Approval Matrix"); a.approvalMatrix.forEach((m) => {
     need(34); setText(BRAND.darkGreen); doc.setFont("helvetica", "bold"); doc.setFontSize(11);
