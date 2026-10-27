@@ -77,4 +77,6 @@ export default async (req) => {
   return new Response("", { status: 202 });
 };
 
-export const config = { path: "/api/analyze-rea-background" };
+// No custom `path` config: background functions are invoked at their canonical
+// /.netlify/functions/analyze-rea-background path. A custom alias can prevent
+// the background runner from firing, leaving jobs stuck at 'pending'.

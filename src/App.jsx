@@ -141,12 +141,20 @@ export default function App() {
       }
 
       // ---- Background fallback (no time limit) ----
+      // IMPORTANT: background functions must be invoked at their canonical
+      // /.netlify/functions/ path — a custom /api/ alias does NOT reliably
+      // trigger the background runner, which leaves the job stuck at 'pending'.
       const jobId = await createJob();
       setProgress("Sending to the extended analysis engine…");
-      await fetch("/api/analyze-rea-background", {
+      const bgResp = await fetch("/.netlify/functions/analyze-rea-background", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ jobId, documents, propInfo, supabaseUrl, supabaseKey: supabaseAnonKey }),
       });
+      // Background functions return 202 Accepted immediately. Anything else
+      // means it wasn't accepted (e.g. 404 = not found at this path).
+      if (bgResp.status !== 202) {
+        throw new Error(`the analysis engine did not accept the job (status ${bgResp.status}). This is a routing issue I can fix.`);
+      }
       const started = Date.now();
       let sawRunning = false;
       while (Date.now() - started < 12 * 60 * 1000) {
@@ -463,7 +471,7 @@ export default function App() {
 
       <div style={{ textAlign: "center", padding: 20, color: C.cement, fontSize: 11 }}>
         Created by Chris Rubio · Preliminary analysis only — not legal advice. Confirm all findings against the executed REA with counsel.
-        <div style={{ marginTop: 6, opacity: 0.5 }}>build v12-diag2</div>
+        <div style={{ marginTop: 6, opacity: 0.5 }}>build v13-bgpath</div>
       </div>
     </div>
   );
