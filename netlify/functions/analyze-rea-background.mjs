@@ -24,11 +24,15 @@ Be rigorous and conservative. If the agreement is silent, say so. Treat multiple
 export default async (req) => {
   // runs in background; the client already got a 202.
   let jobId, supaUrl, supaKey;
+  console.log("[analyze-rea-background] invoked");
   try {
     const body = await req.json();
     jobId = body.jobId; supaUrl = body.supabaseUrl; supaKey = body.supabaseKey;
     const { documents, propInfo } = body;
+    console.log(`[analyze-rea-background] jobId=${jobId} docs=${documents ? documents.length : "none"} supaUrl=${supaUrl ? "yes" : "no"} supaKey=${supaKey ? "yes" : "no"}`);
     const supabase = createClient(supaUrl, supaKey);
+    // mark the job as running so the browser can tell it actually started
+    await supabase.from("jobs").update({ status: "running" }).eq("id", jobId);
 
     const rawKey = process.env.ANTHROPIC_API_KEY || "";
     const apiKey = rawKey.trim();
@@ -57,14 +61,18 @@ export default async (req) => {
     const match = text.match(/\{[\s\S]*\}/);
     const parsed = JSON.parse((match ? match[0] : text).replace(/```json|```/g, "").trim());
 
+    console.log("[analyze-rea-background] analysis done, writing result");
     await supabase.from("jobs").update({ status: "done", result: parsed }).eq("id", jobId);
+    console.log("[analyze-rea-background] result written OK");
   } catch (err) {
+    const msg = String(err && err.message ? err.message : err);
+    console.error("[analyze-rea-background] ERROR:", msg);
     try {
       if (jobId && supaUrl && supaKey) {
         const supabase = createClient(supaUrl, supaKey);
-        await supabase.from("jobs").update({ status: "error", error: String(err && err.message ? err.message : err) }).eq("id", jobId);
+        await supabase.from("jobs").update({ status: "error", error: msg }).eq("id", jobId);
       }
-    } catch (e) {}
+    } catch (e) { console.error("[analyze-rea-background] failed to write error to jobs:", String(e)); }
   }
   return new Response("", { status: 202 });
 };

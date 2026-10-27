@@ -158,10 +158,12 @@ export default function App() {
         catch (pe) { continue; }
         if (job.status === "done") { setProgress(""); setAnalysis(job.result); return; }
         if (job.status === "error") throw new Error(job.error || "analysis failed");
-        // Guard: if after 45s the job is still 'pending' and never moved, the
-        // background function likely isn't running on this plan — fail clearly.
-        if (job.status === "pending") { if (secs > 45 && !sawRunning) { /* keep waiting a bit more */ } }
-        else { sawRunning = true; }
+        if (job.status === "running") sawRunning = true;
+        // Guard: if after 40s the job never even reached 'running', the background
+        // function isn't executing — fail clearly instead of hanging for minutes.
+        if (!sawRunning && secs > 40) {
+          throw new Error("the background analysis never started (the job stayed queued). This usually points to the background function not being invoked. Check the function logs — I can fix the cause.");
+        }
       }
       throw new Error("the analysis timed out. For a very large package, try the base agreement plus only the most recent amendments.");
     } catch (e) { setError("Couldn't analyze the documents: " + e.message); }
@@ -461,7 +463,7 @@ export default function App() {
 
       <div style={{ textAlign: "center", padding: 20, color: C.cement, fontSize: 11 }}>
         Created by Chris Rubio · Preliminary analysis only — not legal advice. Confirm all findings against the executed REA with counsel.
-        <div style={{ marginTop: 6, opacity: 0.5 }}>build v11-realerror</div>
+        <div style={{ marginTop: 6, opacity: 0.5 }}>build v12-diag2</div>
       </div>
     </div>
   );
