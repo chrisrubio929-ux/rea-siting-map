@@ -166,6 +166,7 @@ export default function App() {
   const [downloading, setDownloading] = useState(false);
   const [openedId, setOpenedId] = useState(null); // id of a saved property we're editing
   const [savedClean, setSavedClean] = useState(true); // false = unsaved changes
+  const [pendingDraft, setPendingDraft] = useState(null); // an unsaved draft the user can resume
 
   const reaRef = useRef();
   const planRef = useRef();
@@ -175,31 +176,42 @@ export default function App() {
 
   const DRAFT_KEY = "rea-draft-v1";
 
-  // Restore an in-progress draft on first load (survives refresh).
+  // On load: open on the HOME page by default. If an unsaved draft exists, hold
+  // it so the user can choose to resume it (via a banner), rather than dropping
+  // them straight into the last open project.
   useEffect(() => {
     refreshLibrary();
     try {
       const raw = localStorage.getItem(DRAFT_KEY);
       if (raw) {
         const d = JSON.parse(raw);
-        if (d && (d.analysis || d.propName || (d.zones && d.zones.length))) {
-          if (d.analysis) setAnalysis(d.analysis);
-          if (d.propName) setPropName(d.propName);
-          if (d.propAddr) setPropAddr(d.propAddr);
-          if (d.propInfo) setPropInfo(d.propInfo);
-          if (d.imgSrc) { setImgSrc(d.imgSrc); setImgType(d.imgType || "image/jpeg"); }
-          if (d.zones) setZones(d.zones);
-          if (d.openedId) setOpenedId(d.openedId);
-          setSavedClean(d.savedClean !== false ? true : false);
-        }
+        if (d && (d.analysis || (d.zones && d.zones.length))) setPendingDraft(d);
       }
     } catch (e) {}
     draftLoaded.current = true;
   }, []);
 
+  // Restore the held draft into the active workspace (user clicked "Resume").
+  const restoreDraft = () => {
+    const d = pendingDraft; if (!d) return;
+    if (d.analysis) setAnalysis(d.analysis);
+    if (d.propName) setPropName(d.propName);
+    if (d.propAddr) setPropAddr(d.propAddr);
+    if (d.propInfo) setPropInfo(d.propInfo);
+    if (d.imgSrc) { setImgSrc(d.imgSrc); setImgType(d.imgType || "image/jpeg"); }
+    if (d.zones) setZones(d.zones);
+    if (d.openedId) setOpenedId(d.openedId);
+    setSavedClean(d.savedClean !== false ? true : false);
+    setPendingDraft(null);
+    setStep(0);
+  };
+  const discardDraft = () => { setPendingDraft(null); try { localStorage.removeItem(DRAFT_KEY); } catch (e) {} };
+
   // Persist the working draft whenever meaningful state changes.
   useEffect(() => {
     if (!draftLoaded.current) return;
+    // Don't touch storage while a saved draft is waiting to be resumed/discarded.
+    if (pendingDraft) return;
     try {
       const hasWork = analysis || propName || (zones && zones.length) || imgSrc;
       if (!hasWork) { localStorage.removeItem(DRAFT_KEY); return; }
@@ -213,7 +225,7 @@ export default function App() {
         localStorage.setItem(DRAFT_KEY, JSON.stringify({ analysis, propName, propAddr, propInfo, imgSrc: null, imgType, zones, openedId, savedClean }));
       }
     } catch (e) { /* storage unavailable; ignore */ }
-  }, [analysis, propName, propAddr, propInfo, imgSrc, imgType, zones, openedId, savedClean]);
+  }, [analysis, propName, propAddr, propInfo, imgSrc, imgType, zones, openedId, savedClean, pendingDraft]);
   const refreshLibrary = async () => { if (!supabaseReady) return; try { setLibrary(await listProperties()); } catch (e) {} };
   const removeProperty = async (p, e) => {
     if (e) e.stopPropagation();
@@ -503,6 +515,15 @@ export default function App() {
         )}
         {error && <div style={{ marginBottom: 16, padding: 12, background: "#FBEAEA", color: C.red, borderRadius: 4, fontSize: 14, border: `1px solid ${C.red}` }}>{error}</div>}
         {notice && <div style={{ marginBottom: 16, padding: 12, background: C.celadonTint + "44", color: C.green, borderRadius: 4, fontSize: 14, border: `1px solid ${C.sage}` }}>{notice}</div>}
+        {pendingDraft && onLibrary && (
+          <div style={{ marginBottom: 20, padding: "12px 16px", background: C.wheatTint, border: `1px solid ${C.wheat}`, borderRadius: 6, fontSize: 13.5, color: C.darkGrey, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+            <span><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: C.amber, marginRight: 8 }} /><strong>You have an unsaved draft{pendingDraft.propName ? ` for "${pendingDraft.propName}"` : ""}.</strong> Resume where you left off, or start fresh below.</span>
+            <span style={{ display: "flex", gap: 8, whiteSpace: "nowrap" }}>
+              <button onClick={restoreDraft} style={{ background: C.green, color: "#fff", border: "none", padding: "7px 16px", borderRadius: 4, fontWeight: 600, fontSize: 12.5, cursor: "pointer", fontFamily: "inherit" }}>Resume draft</button>
+              <button onClick={discardDraft} style={{ background: "transparent", color: C.cement, border: `1px solid ${C.celadonTint}`, padding: "7px 14px", borderRadius: 4, fontWeight: 600, fontSize: 12.5, cursor: "pointer", fontFamily: "inherit" }}>Discard</button>
+            </span>
+          </div>
+        )}
         {supabaseReady && !savedClean && analysis && !onLibrary && (
           <div style={{ marginBottom: 16, padding: "10px 14px", background: C.wheatTint, border: `1px solid ${C.wheat}`, borderRadius: 4, fontSize: 13, color: C.darkGrey, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
             <span><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: C.amber, marginRight: 8 }} /><strong>Draft · not saved.</strong> Your work is kept in this browser, but save to the library to keep it for your team and across devices.</span>
@@ -712,7 +733,7 @@ export default function App() {
           <div style={{ color: "#fff", opacity: 0.6, fontSize: 11, marginTop: 6 }}>
             © {new Date().getFullYear()} CBRE, Inc. All Rights Reserved. Confidential &amp; Proprietary.
           </div>
-          <div style={{ color: "#fff", opacity: 0.3, fontSize: 10, marginTop: 10 }}>build v32-sectionpage</div>
+          <div style={{ color: "#fff", opacity: 0.3, fontSize: 10, marginTop: 10 }}>build v33-home</div>
         </div>
       </div>
     </div>
